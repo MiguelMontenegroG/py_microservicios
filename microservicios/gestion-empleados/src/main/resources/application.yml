@@ -6,9 +6,9 @@ spring:
     name: gestion-empleados
 
   datasource:
-    url: ${EMPLEADOS_DB_URL:jdbc:postgresql://localhost:5432/empleados_db}
-    username: ${EMPLEADOS_DB_USER:postgres}
-    password: ${EMPLEADOS_DB_PASS:postgres}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/empleados_db}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
 
   jpa:
