@@ -1,0 +1,414 @@
+openapi: "3.1.0"
+info:
+  title: API de Gestión de Empleados
+  description: Microservicio para la gestión de empleados. Proporciona operaciones CRUD, gestión de estados y publicación de eventos a través de RabbitMQ.
+  version: "1.0.0"
+  contact:
+    name: Equipo de Desarrollo
+    email: dev@empresa.com
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+
+servers:
+  - url: http://localhost:8082
+    description: Desarrollo local
+  - url: http://gestion-empleados:8082
+    description: Docker Compose
+
+paths:
+  /health:
+    get:
+      summary: Health Check
+      description: Verifica el estado del servicio y sus dependencias
+      operationId: healthCheck
+      tags:
+        - Health
+      responses:
+        "200":
+          description: Servicio saludable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /employees:
+    get:
+      summary: Listar empleados
+      description: Devuelve una lista paginada de empleados activos (excluye RETIRADO)
+      operationId: listarEmpleados
+      tags:
+        - Empleados
+      parameters:
+        - name: page
+          in: query
+          description: Número de página (desde 0)
+          required: false
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          description: Tamaño de página
+          required: false
+          schema:
+            type: integer
+            default: 10
+        - name: sort
+          in: query
+          description: Ordenamiento (ej. createdAt,desc)
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lista de empleados obtenida correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  content:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EmpleadoResponse'
+                  totalElements:
+                    type: integer
+                  totalPages:
+                    type: integer
+                  number:
+                    type: integer
+                  size:
+                    type: integer
+    post:
+      summary: Crear empleado
+      description: Crea un nuevo empleado y publica el evento empleado.creado en RabbitMQ
+      operationId: crearEmpleado
+      tags:
+        - Empleados
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmpleadoRequest'
+      responses:
+        "201":
+          description: Empleado creado correctamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmpleadoResponse'
+        "400":
+          description: Datos inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "409":
+          description: Conflicto (email o número de empleado duplicado)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /employees/{id}:
+    get:
+      summary: Obtener empleado por ID
+      description: Devuelve los datos completos de un empleado específico
+      operationId: obtenerEmpleado
+      tags:
+        - Empleados
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID del empleado (UUID)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Empleado encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmpleadoResponse'
+        "404":
+          description: Empleado no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      summary: Actualizar empleado
+      description: Actualiza los datos de un empleado y publica el evento empleado.actualizado
+      operationId: actualizarEmpleado
+      tags:
+        - Empleados
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmpleadoRequest'
+      responses:
+        "200":
+          description: Empleado actualizado correctamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmpleadoResponse'
+        "404":
+          description: Empleado no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "409":
+          description: Conflicto (email o número de empleado duplicado)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Eliminar empleado (soft delete)
+      description: Marca un empleado como RETIRADO y publica el evento empleado.eliminado
+      operationId: eliminarEmpleado
+      tags:
+        - Empleados
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Empleado eliminado correctamente (sin contenido)
+        "404":
+          description: Empleado no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /employees/{id}/status:
+    get:
+      summary: Obtener estado de empleado
+      description: Devuelve solo el estado actual del empleado
+      operationId: obtenerEstado
+      tags:
+        - Empleados
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Estado obtenido correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  estado:
+                    $ref: '#/components/schemas/EstadoEmpleado'
+        "404":
+          description: Empleado no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      summary: Cambiar estado de empleado
+      description: Cambia el estado de un empleado y publica el evento correspondiente
+      operationId: cambiarEstado
+      tags:
+        - Empleados
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EstadoRequest'
+      responses:
+        "200":
+          description: Estado actualizado correctamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmpleadoResponse'
+        "400":
+          description: Estado inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "404":
+          description: Empleado no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    EmpleadoRequest:
+      type: object
+      required:
+        - nombre
+        - apellido
+        - email
+        - numeroEmpleado
+        - fechaIngreso
+      properties:
+        nombre:
+          type: string
+          description: Nombre del empleado
+          example: Juan
+        apellido:
+          type: string
+          description: Apellido del empleado
+          example: Pérez
+        email:
+          type: string
+          format: email
+          description: Email del empleado
+          example: juan.perez@empresa.com
+        numeroEmpleado:
+          type: string
+          description: Número único de empleado
+          example: EMP-001
+        fechaIngreso:
+          type: string
+          format: date
+          description: Fecha de ingreso
+          example: "2024-01-15"
+        cargo:
+          type: string
+          description: Cargo del empleado
+          example: Desarrollador Senior
+        area:
+          type: string
+          description: Área del empleado
+          example: Tecnología
+
+    EmpleadoResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: ID del empleado
+        nombre:
+          type: string
+          description: Nombre del empleado
+        apellido:
+          type: string
+          description: Apellido del empleado
+        email:
+          type: string
+          format: email
+          description: Email del empleado
+        numeroEmpleado:
+          type: string
+          description: Número único de empleado
+        fechaIngreso:
+          type: string
+          format: date
+          description: Fecha de ingreso
+        cargo:
+          type: string
+          description: Cargo del empleado
+        area:
+          type: string
+          description: Área del empleado
+        estado:
+          $ref: '#/components/schemas/EstadoEmpleado'
+        createdAt:
+          type: string
+          format: date-time
+          description: Fecha de creación
+        updatedAt:
+          type: string
+          format: date-time
+          description: Fecha de última actualización
+
+    EstadoRequest:
+      type: object
+      required:
+        - estado
+      properties:
+        estado:
+          $ref: '#/components/schemas/EstadoEmpleado'
+
+    EstadoEmpleado:
+      type: string
+      enum:
+        - ACTIVO
+        - EN_VACACIONES
+        - RETIRADO
+      description: Estado del empleado
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: UP
+        service:
+          type: string
+          example: gestion-empleados
+        version:
+          type: string
+          example: "1.0.0"
+        timestamp:
+          type: string
+          format: date-time
+        dependencies:
+          type: object
+          properties:
+            database:
+              type: string
+              example: UP
+            rabbitmq:
+              type: string
+              example: UP
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: EMPLEADO_NO_ENCONTRADO
+            message:
+              type: string
+              example: El empleado con id X no existe
+        timestamp:
+          type: string
+          format: date-time

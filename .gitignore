@@ -1,0 +1,123 @@
+# ============================================
+# Java / Maven
+# ============================================
+target/
+*.class
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+!.mvn/wrapper/maven-wrapper.jar
+
+# ============================================
+# Logs
+# ============================================
+*.log
+**/logs/
+**/log/
+
+# ============================================
+# IDE - IntelliJ IDEA
+# ============================================
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# ============================================
+# IDE - Eclipse
+# ============================================
+.project
+.classpath
+.settings/
+bin/
+
+# ============================================
+# IDE - VS Code
+# ============================================
+.vscode/
+*.code-workspace
+
+# ============================================
+# IDE - NetBeans
+# ============================================
+nbproject/private/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+# ============================================
+# OS
+# ============================================
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*~
+
+# ============================================
+# Environment
+# ============================================
+.env
+.env.local
+.env.*.local
+*.p12
+*.jks
+*.key
+*.crt
+application-local.yml
+application-local.properties
+application-dev.yml
+application-dev.properties
+
+# ============================================
+# Docker
+# ============================================
+docker-compose.override.yml
+*.pid
+
+# ============================================
+# Maven Wrapper
+# ============================================
+.mvn/wrapper/maven-wrapper.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# ============================================
+# Build
+# ============================================
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# ============================================
+# Testing
+# ============================================
+test-results/
+allure-results/
+**/target/test-classes/
+**/target/surefire-reports/
+**/target/failsafe-reports/
+**/target/classes/
+
+# ============================================
+# Documentacion
+# ============================================
+docs/
+
+# ============================================
+# Node (si aplica)
+# ============================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ============================================
+# Keep gitignore
+# ============================================
+!.gitignore
