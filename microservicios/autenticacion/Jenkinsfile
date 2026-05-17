@@ -1,0 +1,73 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_REGISTRY = 'localhost:5050'
+        SERVICE_NAME = 'autenticacion'
+    }
+
+    stages {
+        stage('Build') {
+            steps {
+                sh 'mvn compile'
+            }
+            post {
+                success {
+                    echo 'Compilacion exitosa'
+                }
+                failure {
+                    echo 'Error en compilacion'
+                }
+            }
+        }
+
+        stage('Test') {
+            steps {
+                sh 'mvn test'
+            }
+            post {
+                success {
+                    junit 'target/surefire-reports/*.xml'
+                }
+            }
+        }
+
+        stage('Quality') {
+            steps {
+                sh 'mvn jacoco:check'
+            }
+            post {
+                success {
+                    echo 'Cobertura de tests >= 70% - OK'
+                }
+                failure {
+                    error 'La cobertura de tests es menor al 70%'
+                }
+            }
+        }
+
+        stage('Package') {
+            steps {
+                sh 'docker build -t ${DOCKER_REGISTRY}/${SERVICE_NAME}:${BUILD_NUMBER} .'
+                sh 'docker push ${DOCKER_REGISTRY}/${SERVICE_NAME}:${BUILD_NUMBER}'
+            }
+            post {
+                success {
+                    echo 'Imagen Docker generada y publicada exitosamente'
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+        success {
+            echo "Pipeline completado exitosamente para ${SERVICE_NAME}:${BUILD_NUMBER}"
+        }
+        failure {
+            echo "Pipeline fallo para ${SERVICE_NAME}:${BUILD_NUMBER}"
+        }
+    }
+}

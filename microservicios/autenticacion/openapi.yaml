@@ -1,0 +1,325 @@
+openapi: "3.0.3"
+info:
+  title: API de Autenticacion
+  description: Microservicio de autenticacion y autorizacion del sistema de gestion de empleados
+  version: "1.0.0"
+  contact:
+    name: Equipo de Desarrollo
+    email: dev@empresa.com
+
+servers:
+  - url: http://localhost:8081
+    description: Desarrollo local
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "CREDENCIALES_INVALIDAS"
+            message:
+              type: string
+              example: "Usuario o contrasena incorrectos"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00"
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "UP"
+        service:
+          type: string
+          example: "autenticacion"
+        version:
+          type: string
+          example: "1.0.0"
+        timestamp:
+          type: string
+          format: date-time
+        dependencies:
+          type: object
+          properties:
+            database:
+              type: string
+              example: "UP"
+            rabbitmq:
+              type: string
+              example: "UP (ver actuator)"
+
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          example: "juan.perez@empresa.com"
+        password:
+          type: string
+          example: "Abc12345"
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiJ9..."
+        expiresIn:
+          type: integer
+          format: int64
+          example: 86400000
+        rol:
+          type: string
+          example: "EMPLEADO"
+        esPrimerAcceso:
+          type: boolean
+          example: true
+
+    ChangePasswordRequest:
+      type: object
+      required:
+        - currentPassword
+        - newPassword
+      properties:
+        currentPassword:
+          type: string
+          example: "Abc12345"
+        newPassword:
+          type: string
+          minLength: 8
+          maxLength: 100
+          example: "NuevaPass123!"
+
+    ValidateTokenRequest:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiJ9..."
+
+    ValidateTokenResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+          example: true
+        empleadoId:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440001"
+        rol:
+          type: string
+          example: "EMPLEADO"
+        username:
+          type: string
+          example: "juan.perez@empresa.com"
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Operacion exitosa"
+        timestamp:
+          type: string
+          format: date-time
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check del servicio
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Servicio saludable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "503":
+          description: Servicio degradado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /auth/login:
+    post:
+      tags:
+        - Autenticacion
+      summary: Iniciar sesion
+      description: Autentica un usuario y devuelve un token JWT
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login exitoso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          description: Datos de entrada invalidos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Credenciales invalidas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Cuenta desactivada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/change-password:
+    post:
+      tags:
+        - Autenticacion
+      summary: Cambiar contrasena
+      description: Cambia la contrasena del usuario autenticado (requiere JWT)
+      operationId: changePassword
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "200":
+          description: Contrasena cambiada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Datos invalidos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Contrasena actual incorrecta o token invalido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/validate:
+    post:
+      tags:
+        - Autenticacion
+      summary: Validar token JWT
+      description: Valida un token JWT y devuelve la informacion del usuario (uso interno entre servicios)
+      operationId: validateToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValidateTokenRequest"
+      responses:
+        "200":
+          description: Token validado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidateTokenResponse"
+
+  /accounts/{empleadoId}/activate:
+    put:
+      tags:
+        - Cuentas
+      summary: Activar cuenta
+      description: Activa la cuenta de un empleado (requiere JWT)
+      operationId: activateAccount
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: empleadoId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Cuenta activada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Usuario no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /accounts/{empleadoId}/deactivate:
+    put:
+      tags:
+        - Cuentas
+      summary: Desactivar cuenta
+      description: Desactiva la cuenta de un empleado (requiere JWT)
+      operationId: deactivateAccount
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: empleadoId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Cuenta desactivada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Usuario no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"

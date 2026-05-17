@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <!-- Appender para Logstash desactivado por defecto
+         para evitar errores cuando Logstash no esta disponible.
+         Se activa con variable de entorno LOG_ENABLE_LOGSTASH=true
+         y configurando LOGSTASH_HOST y LOGSTASH_PORT -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

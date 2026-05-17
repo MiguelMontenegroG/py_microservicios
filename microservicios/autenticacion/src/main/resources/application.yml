@@ -1,0 +1,75 @@
+server:
+  port: ${SERVER_PORT:8081}
+
+spring:
+  application:
+    name: autenticacion
+
+  datasource:
+    url: ${AUTH_DB_URL:jdbc:postgresql://localhost:5432/autenticacion_db}
+    username: ${AUTH_DB_USERNAME:postgres}
+    password: ${AUTH_DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          lob:
+            non_contextual_creation: true
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASS:guest}
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:MiClaveSecretaParaJWTDeAutenticacionDebeSerLarga32Chars!}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+  rabbitmq:
+    exchange:
+      empleados: empleados.exchange
+      vacaciones: vacaciones.exchange
+      cuentas: cuentas.exchange
+    queue:
+      auth-empleado-creado: auth.empleado.creado
+      auth-empleado-eliminado: auth.empleado.eliminado
+      auth-vacaciones-programadas: auth.vacaciones.programadas
+    routing-key:
+      cuenta-activada: cuenta.activada
+      cuenta-desactivada: cuenta.desactivada
+  bcrypt:
+    strength: ${BCRYPT_STRENGTH:12}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+
+logging:
+  level:
+    com.empresa.autenticacion: ${LOG_LEVEL:INFO}
+    org.springframework: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
