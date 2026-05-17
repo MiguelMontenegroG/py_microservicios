@@ -1,0 +1,57 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_REGISTRY = 'localhost:5050'
+        SERVICE_NAME = 'gestion-perfiles'
+    }
+
+    stages {
+        stage('Build') {
+            steps {
+                sh 'pip install --no-cache-dir -r requirements.txt'
+            }
+        }
+
+        stage('Test') {
+            steps {
+                sh 'pytest --cov=src --cov-report=xml --cov-report=term tests/'
+            }
+        }
+
+        stage('Quality') {
+            steps {
+                script {
+                    def coverage = sh(
+                        script: "python -c \"import xml.etree.ElementTree as ET; root = ET.parse('coverage.xml').getroot(); print(root.attrib.get('line-rate', 0))\"",
+                        returnStdout: true
+                    ).trim()
+                    def coveragePercent = (coverage.toFloat() * 100).round(2)
+                    echo "Cobertura actual: ${coveragePercent}%"
+                    if (coveragePercent < 70.0) {
+                        error "Cobertura insuficiente: ${coveragePercent}% (minimo requerido: 70%)"
+                    }
+                }
+            }
+        }
+
+        stage('Package') {
+            steps {
+                sh 'docker build -t ${DOCKER_REGISTRY}/${SERVICE_NAME}:${BUILD_NUMBER} .'
+                sh 'docker push ${DOCKER_REGISTRY}/${SERVICE_NAME}:${BUILD_NUMBER}'
+            }
+        }
+    }
+
+    post {
+        always {
+            junit '**/test-reports/*.xml'
+        }
+        failure {
+            echo "Pipeline fallo para ${SERVICE_NAME}"
+        }
+        success {
+            echo "Pipeline completado exitosamente para ${SERVICE_NAME}"
+        }
+    }
+}

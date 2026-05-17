@@ -1,0 +1,340 @@
+openapi: "3.0.3"
+info:
+  title: Gestión de Perfiles
+  description: Microservicio para la gestión de perfiles de empleados. Parte del sistema de microservicios.
+  version: "1.0.0"
+  contact:
+    name: Equipo de Desarrollo
+
+servers:
+  - url: http://localhost:8083
+    description: Desarrollo local
+  - url: http://gestion-perfiles:8083
+    description: Docker Compose
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check del servicio
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Estado de salud del servicio y dependencias
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /profiles:
+    post:
+      tags:
+        - Perfiles
+      summary: Crear perfil vacío (uso interno)
+      description: Crea un perfil vacío para un empleado. Este endpoint es para uso interno desde eventos de RabbitMQ.
+      operationId: crearPerfil
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PerfilCreate"
+      responses:
+        "201":
+          description: Perfil creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "409":
+          description: Ya existe un perfil para ese empleado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /profiles/{empleadoId}:
+    get:
+      tags:
+        - Perfiles
+      summary: Obtener perfil de empleado
+      operationId: obtenerPerfil
+      parameters:
+        - name: empleadoId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID del empleado (UUID)
+      responses:
+        "200":
+          description: Perfil encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Perfil no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    put:
+      tags:
+        - Perfiles
+      summary: Actualizar perfil de empleado
+      description: Actualiza el perfil del empleado autenticado. El header X-Empleado-Id debe coincidir con el empleadoId del path.
+      operationId: actualizarPerfil
+      parameters:
+        - name: empleadoId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID del empleado (UUID)
+        - name: X-Empleado-Id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID del empleado autenticado (inyectado por API Gateway)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PerfilUpdate"
+      responses:
+        "200":
+          description: Perfil actualizado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "403":
+          description: No autorizado para modificar este perfil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Perfil no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [UP, DEGRADED, DOWN]
+          example: "UP"
+        service:
+          type: string
+          example: "gestion-perfiles"
+        version:
+          type: string
+          example: "1.0.0"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2024-06-01T09:00:00Z"
+        dependencies:
+          type: object
+          properties:
+            mongodb:
+              type: string
+              enum: [UP, DOWN]
+              example: "UP"
+            rabbitmq:
+              type: string
+              enum: [UP, DOWN, UNKNOWN]
+              example: "UP"
+
+    PerfilCreate:
+      type: object
+      required:
+        - empleadoId
+        - email
+      properties:
+        empleadoId:
+          type: string
+          format: uuid
+          description: ID del empleado
+          example: "550e8400-e29b-41d4-a716-446655440001"
+        email:
+          type: string
+          format: email
+          description: Email del empleado
+          example: "juan.perez@empresa.com"
+        nombre:
+          type: string
+          description: Nombre del empleado
+          example: "Juan"
+        apellido:
+          type: string
+          description: Apellido del empleado
+          example: "Pérez"
+
+    PerfilUpdate:
+      type: object
+      properties:
+        foto:
+          type: string
+          format: uri
+          nullable: true
+          description: URL de la foto de perfil
+          example: "https://storage.example.com/fotos/juan.jpg"
+        biografia:
+          type: string
+          nullable: true
+          description: Biografía del empleado
+          example: "Desarrollador de software con 10 años de experiencia"
+        telefono:
+          type: string
+          nullable: true
+          description: Teléfono de contacto
+          example: "+52 55 1234 5678"
+        direccion:
+          type: object
+          nullable: true
+          properties:
+            calle:
+              type: string
+              example: "Av. Principal 123"
+            ciudad:
+              type: string
+              example: "Ciudad de México"
+            codigoPostal:
+              type: string
+              example: "06600"
+            pais:
+              type: string
+              example: "México"
+        redesSociales:
+          type: object
+          nullable: true
+          properties:
+            linkedin:
+              type: string
+              format: uri
+              example: "https://linkedin.com/in/juanperez"
+            github:
+              type: string
+              format: uri
+              example: "https://github.com/juanperez"
+
+    PerfilResponse:
+      type: object
+      properties:
+        empleadoId:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440001"
+        email:
+          type: string
+          format: email
+          example: "juan.perez@empresa.com"
+        nombre:
+          type: string
+          example: "Juan"
+        apellido:
+          type: string
+          example: "Pérez"
+        foto:
+          type: string
+          format: uri
+          nullable: true
+          example: "https://storage.example.com/fotos/juan.jpg"
+        biografia:
+          type: string
+          nullable: true
+          example: "Desarrollador de software con 10 años de experiencia"
+        telefono:
+          type: string
+          nullable: true
+          example: "+52 55 1234 5678"
+        direccion:
+          type: object
+          nullable: true
+          properties:
+            calle:
+              type: string
+              example: "Av. Principal 123"
+            ciudad:
+              type: string
+              example: "Ciudad de México"
+            codigoPostal:
+              type: string
+              example: "06600"
+            pais:
+              type: string
+              example: "México"
+        redesSociales:
+          type: object
+          nullable: true
+          properties:
+            linkedin:
+              type: string
+              format: uri
+              example: "https://linkedin.com/in/juanperez"
+            github:
+              type: string
+              format: uri
+              example: "https://github.com/juanperez"
+        archivado:
+          type: boolean
+          example: false
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-06-01T09:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2024-06-01T09:00:00Z"
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: "#/components/schemas/PerfilResponse"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2024-06-01T09:00:00Z"
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "PERFIL_NO_ENCONTRADO"
+            message:
+              type: string
+              example: "No se encontró perfil para el empleado 550e8400-e29b-41d4-a716-446655440001"
+            details:
+              type: object
+              nullable: true
+        timestamp:
+          type: string
+          format: date-time
+          example: "2024-06-01T09:00:00Z"
