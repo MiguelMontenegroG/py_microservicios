@@ -17,7 +17,9 @@ pipeline {
 
         stage('Test') {
             steps {
-                sh 'go test ./... -cover -coverprofile=coverage.out'
+                sh """
+                    go test ./internal/service/... ./internal/handlers/... ./internal/repository/... ./pkg/middleware/... ./tests/... -cover -coverprofile=coverage.out -v 2>&1 | tee test_output.txt
+                """
             }
             post {
                 always {
@@ -29,13 +31,13 @@ pipeline {
         stage('Quality') {
             steps {
                 sh """
-                    go tool cover -func=coverage.out | grep total | awk '{print \$3}' | sed 's/%//' > coverage_percent.txt
-                    COVERAGE=\$(cat coverage_percent.txt)
-                    if [ \$(echo "\$COVERAGE < 70" | bc -l) -eq 1 ]; then
-                        echo "Cobertura \$COVERAGE% es menor al 70% requerido"
+                    COBERTURA=\$(go tool cover -func=coverage.out | grep total | awk '{print \$3}' | sed 's/%//')
+                    echo "Cobertura: \${COBERTURA}%"
+                    if [ \$(echo "\${COBERTURA} < 70" | bc -l) -eq 1 ]; then
+                        echo "Cobertura \${COBERTURA}% es menor al 70% requerido"
                         exit 1
                     fi
-                    echo "Cobertura \$COVERAGE% - OK"
+                    echo "Cobertura \${COBERTURA}% - OK"
                 """
             }
         }

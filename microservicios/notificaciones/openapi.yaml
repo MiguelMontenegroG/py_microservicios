@@ -1,0 +1,99 @@
+openapi: "3.0.3"
+info:
+  title: "Servicio de Notificaciones"
+  description: "Microservicio de notificaciones por email. Consume eventos de RabbitMQ y envia correos usando plantillas HTML."
+  version: "1.0.0"
+  contact:
+    name: "Equipo de Desarrollo"
+    email: "dev@empresa.com"
+
+servers:
+  - url: "http://localhost:8085"
+    description: "Desarrollo local"
+
+paths:
+  /health:
+    get:
+      tags:
+        - "Salud"
+      summary: "Health Check del servicio"
+      description: "Retorna el estado del servicio y sus dependencias (RabbitMQ, SMTP)"
+      operationId: "healthCheck"
+      responses:
+        "200":
+          description: "Estado del servicio"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: ["UP", "DOWN"]
+                    description: "Estado general del servicio"
+                    example: "UP"
+                  service:
+                    type: string
+                    description: "Nombre del servicio"
+                    example: "notificaciones"
+                  version:
+                    type: string
+                    description: "Version del servicio"
+                    example: "1.0.0"
+                  timestamp:
+                    type: string
+                    format: "date-time"
+                    description: "Fecha y hora de la respuesta"
+                    example: "2024-01-15T10:30:00Z"
+                  dependencies:
+                    type: object
+                    properties:
+                      rabbitmq:
+                        type: string
+                        enum: ["UP", "DOWN"]
+                        description: "Estado de la conexion a RabbitMQ"
+                        example: "UP"
+                      smtp:
+                        type: string
+                        enum: ["UP", "DOWN"]
+                        description: "Estado de la conexion SMTP"
+                        example: "UP"
+
+  /notifications/stats:
+    get:
+      tags:
+        - "Estadisticas"
+      summary: "Estadisticas de notificaciones"
+      description: "Retorna el contador de emails enviados y errores acumulados en memoria"
+      operationId: "getNotificationStats"
+      responses:
+        "200":
+          description: "Estadisticas de notificaciones"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enviados:
+                    type: integer
+                    description: "Numero de emails enviados exitosamente"
+                    example: 42
+                  errores:
+                    type: integer
+                    description: "Numero de errores al enviar emails"
+                    example: 3
+
+  /metrics:
+    get:
+      tags:
+        - "Metricas"
+      summary: "Metricas Prometheus"
+      description: "Expone metricas en formato Prometheus para ser scrapeadas"
+      operationId: "getMetrics"
+      responses:
+        "200":
+          description: "Metricas en formato Prometheus (text/plain)"
+          content:
+            text/plain:
+              schema:
+                type: "string"

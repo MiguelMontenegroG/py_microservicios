@@ -1,0 +1,40 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_REGISTRY = 'localhost:5050'
+        SERVICE_NAME = 'notificaciones'
+    }
+
+    stages {
+        stage('Build') {
+            steps {
+                sh 'pip install -r requirements.txt'
+            }
+        }
+        stage('Test') {
+            steps {
+                sh 'pytest --cov=src --cov-report=xml --cov-fail-under=70'
+            }
+        }
+        stage('Quality') {
+            steps {
+                sh '''
+                    coverage=$(grep -oP 'line-rate="\\K[^"]+' coverage.xml | tail -1)
+                    coverage_pct=$(echo "$coverage * 100" | bc | cut -d. -f1)
+                    echo "Cobertura: ${coverage_pct}%"
+                    if [ "$coverage_pct" -lt 70 ]; then
+                        echo "Cobertura por debajo del 70%"
+                        exit 1
+                    fi
+                '''
+            }
+        }
+        stage('Package') {
+            steps {
+                sh 'docker build -t ${DOCKER_REGISTRY}/${SERVICE_NAME}:${BUILD_NUMBER} .'
+                sh 'docker push ${DOCKER_REGISTRY}/${SERVICE_NAME}:${BUILD_NUMBER}'
+            }
+        }
+    }
+}

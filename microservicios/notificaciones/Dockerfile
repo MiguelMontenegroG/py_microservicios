@@ -1,5 +1,13 @@
 # Placeholder - pendiente de implementar
-FROM alpine:3.19
-RUN apk add --no-cache curl
+FROM python:3.12-alpine AS builder
+WORKDIR /app
+RUN apk add --no-cache gcc musl-dev
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+FROM python:3.12-alpine
+WORKDIR /app
+COPY --from=builder /install /usr/local
+COPY src ./src
 EXPOSE 8085
-CMD ["sh", "-c", "echo 'Servicio notificaciones - pendiente de implementar' && tail -f /dev/null"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8085"]
