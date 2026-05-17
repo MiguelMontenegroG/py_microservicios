@@ -1,0 +1,364 @@
+openapi: 3.0.3
+info:
+  title: Gestion de Vacaciones API
+  description: Microservicio para la gestion de solicitudes de vacaciones de empleados
+  version: 1.0.0
+  contact:
+    name: Equipo de Desarrollo
+    email: dev@empresa.com
+
+servers:
+  - url: http://localhost:8084
+    description: Desarrollo
+  - url: http://gestion-vacaciones:8084
+    description: Docker Compose
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check del servicio
+      description: Verifica el estado del servicio y sus dependencias (PostgreSQL y RabbitMQ)
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Estado del servicio
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: UP
+                service: gestion-vacaciones
+                timestamp: "2024-01-15T10:30:00Z"
+                dependencies:
+                  database: UP
+                  rabbitmq: UP
+
+  /metrics:
+    get:
+      tags:
+        - Métricas
+      summary: Métricas Prometheus
+      description: Expone métricas en formato Prometheus
+      operationId: getMetrics
+      responses:
+        '200':
+          description: Métricas en formato texto
+
+  /vacations:
+    post:
+      tags:
+        - Vacaciones
+      summary: Programar vacaciones
+      description: Crea una nueva solicitud de vacaciones para un empleado
+      operationId: createVacacion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVacacionRequest'
+            example:
+              empleadoId: "550e8400-e29b-41d4-a716-446655440001"
+              email: "juan.perez@empresa.com"
+              nombre: "Juan Perez"
+              fechaInicio: "2024-07-01"
+              fechaFin: "2024-07-15"
+      responses:
+        '201':
+          description: Vacacion creada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VacacionResponse'
+              example:
+                success: true
+                data:
+                  id: "550e8400-e29b-41d4-a716-446655440010"
+                  empleadoId: "550e8400-e29b-41d4-a716-446655440001"
+                  fechaInicio: "2024-07-01T00:00:00Z"
+                  fechaFin: "2024-07-15T00:00:00Z"
+                  estado: "PROGRAMADA"
+                  createdAt: "2024-01-15T10:30:00Z"
+                timestamp: "2024-01-15T10:30:00Z"
+        '400':
+          description: Datos de solicitud invalidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: "FECHA_INVALIDA"
+                  message: "Formato de fechaInicio invalido. Use YYYY-MM-DD"
+                timestamp: "2024-01-15T10:30:00Z"
+        '409':
+          description: Conflicto - periodo solapado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: "VACACIONES_SOLAPADAS"
+                  message: "Ya existe un periodo de vacaciones programado que se solapa con las fechas solicitadas"
+                timestamp: "2024-01-15T10:30:00Z"
+
+    get:
+      tags:
+        - Vacaciones
+      summary: Listar vacaciones
+      description: Lista todas las vacaciones o filtra por ID de empleado
+      operationId: listVacaciones
+      parameters:
+        - in: query
+          name: empleadoId
+          schema:
+            type: string
+            format: uuid
+          required: false
+          description: ID del empleado para filtrar vacaciones
+      responses:
+        '200':
+          description: Lista de vacaciones
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListVacacionesResponse'
+              example:
+                success: true
+                data:
+                  - id: "550e8400-e29b-41d4-a716-446655440010"
+                    empleadoId: "550e8400-e29b-41d4-a716-446655440001"
+                    fechaInicio: "2024-07-01T00:00:00Z"
+                    fechaFin: "2024-07-15T00:00:00Z"
+                    estado: "PROGRAMADA"
+                    createdAt: "2024-01-15T10:30:00Z"
+                timestamp: "2024-01-15T10:30:00Z"
+
+  /vacations/{id}:
+    get:
+      tags:
+        - Vacaciones
+      summary: Obtener vacacion por ID
+      description: Obtiene los detalles de una vacacion especifica
+      operationId: getVacacionById
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID de la vacacion
+      responses:
+        '200':
+          description: Detalles de la vacacion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VacacionResponse'
+        '404':
+          description: Vacacion no encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: "VACACION_NO_ENCONTRADA"
+                  message: "No se encontro vacacion con id 550e8400-e29b-41d4-a716-446655440999"
+                timestamp: "2024-01-15T10:30:00Z"
+
+    delete:
+      tags:
+        - Vacaciones
+      summary: Cancelar vacacion
+      description: Cancela una vacacion programada cambiando su estado a CANCELADA
+      operationId: cancelVacacion
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID de la vacacion a cancelar
+      responses:
+        '200':
+          description: Vacacion cancelada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VacacionResponse'
+              example:
+                success: true
+                data: {}
+                timestamp: "2024-01-15T10:30:00Z"
+        '404':
+          description: Vacacion no encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: "VACACION_NO_ENCONTRADA"
+                  message: "No se encontro vacacion con id 550e8400-e29b-41d4-a716-446655440999"
+                timestamp: "2024-01-15T10:30:00Z"
+        '409':
+          description: Conflicto - no se puede cancelar
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: "VACACION_YA_CANCELADA"
+                  message: "La vacacion ya se encuentra cancelada"
+                timestamp: "2024-01-15T10:30:00Z"
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [UP, DEGRADED]
+          description: Estado general del servicio
+        service:
+          type: string
+          description: Nombre del servicio
+        timestamp:
+          type: string
+          format: date-time
+          description: Marca de tiempo ISO-8601
+        dependencies:
+          type: object
+          properties:
+            database:
+              type: string
+              enum: [UP, DOWN]
+            rabbitmq:
+              type: string
+              enum: [UP, DOWN]
+      required:
+        - status
+        - service
+        - timestamp
+        - dependencies
+
+    CreateVacacionRequest:
+      type: object
+      required:
+        - empleadoId
+        - email
+        - nombre
+        - fechaInicio
+        - fechaFin
+      properties:
+        empleadoId:
+          type: string
+          format: uuid
+          description: ID del empleado que solicita vacaciones
+        email:
+          type: string
+          format: email
+          description: Email del empleado (para incluirlo en el evento)
+        nombre:
+          type: string
+          description: Nombre completo del empleado (para incluirlo en el evento)
+        fechaInicio:
+          type: string
+          format: date
+          description: Fecha de inicio de las vacaciones (YYYY-MM-DD)
+        fechaFin:
+          type: string
+          format: date
+          description: Fecha de fin de las vacaciones (YYYY-MM-DD)
+
+    Vacacion:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: ID unico de la vacacion
+        empleadoId:
+          type: string
+          format: uuid
+          description: ID del empleado
+        fechaInicio:
+          type: string
+          format: date-time
+          description: Fecha de inicio
+        fechaFin:
+          type: string
+          format: date-time
+          description: Fecha de fin
+        estado:
+          type: string
+          enum: [PROGRAMADA, ACTIVA, COMPLETADA, CANCELADA]
+          description: Estado actual de la vacacion
+        createdAt:
+          type: string
+          format: date-time
+          description: Fecha de creacion
+
+    VacacionResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/Vacacion'
+        error:
+          $ref: '#/components/schemas/ErrorInfo'
+        timestamp:
+          type: string
+          format: date-time
+
+    ListVacacionesResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Vacacion'
+        error:
+          $ref: '#/components/schemas/ErrorInfo'
+        timestamp:
+          type: string
+          format: date-time
+
+    ErrorInfo:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Codigo de error
+        message:
+          type: string
+          description: Mensaje descriptivo del error
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          $ref: '#/components/schemas/ErrorInfo'
+        timestamp:
+          type: string
+          format: date-time

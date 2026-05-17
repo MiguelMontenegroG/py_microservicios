@@ -1,0 +1,63 @@
+pipeline {
+    agent any
+
+    environment {
+        SERVICE_NAME = 'gestion-vacaciones'
+        REGISTRY = 'localhost:5050'
+        GO_VERSION = '1.22'
+    }
+
+    stages {
+        stage('Build') {
+            steps {
+                sh 'go mod download'
+                sh 'go build ./...'
+            }
+        }
+
+        stage('Test') {
+            steps {
+                sh 'go test ./... -cover -coverprofile=coverage.out'
+            }
+            post {
+                always {
+                    junit 'report.xml'
+                }
+            }
+        }
+
+        stage('Quality') {
+            steps {
+                sh """
+                    go tool cover -func=coverage.out | grep total | awk '{print \$3}' | sed 's/%//' > coverage_percent.txt
+                    COVERAGE=\$(cat coverage_percent.txt)
+                    if [ \$(echo "\$COVERAGE < 70" | bc -l) -eq 1 ]; then
+                        echo "Cobertura \$COVERAGE% es menor al 70% requerido"
+                        exit 1
+                    fi
+                    echo "Cobertura \$COVERAGE% - OK"
+                """
+            }
+        }
+
+        stage('Package') {
+            steps {
+                sh """
+                    docker build -t ${REGISTRY}/${SERVICE_NAME}:${BUILD_NUMBER} .
+                    docker tag ${REGISTRY}/${SERVICE_NAME}:${BUILD_NUMBER} ${REGISTRY}/${SERVICE_NAME}:latest
+                    docker push ${REGISTRY}/${SERVICE_NAME}:${BUILD_NUMBER}
+                    docker push ${REGISTRY}/${SERVICE_NAME}:latest
+                """
+            }
+        }
+    }
+
+    post {
+        failure {
+            echo "Pipeline fallo para ${SERVICE_NAME}"
+        }
+        success {
+            echo "Pipeline completado exitosamente para ${SERVICE_NAME}"
+        }
+    }
+}
