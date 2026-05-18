@@ -1,0 +1,35 @@
+FROM jenkins/jenkins:lts-jdk21
+
+USER root
+
+# Instalar herramientas necesarias para los pipelines
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Maven (Java)
+    maven \
+    # Python 3 y pip
+    python3 \
+    python3-pip \
+    python3-venv \
+    # Go
+    golang-go \
+    # Node.js y npm
+    nodejs \
+    npm \
+    # Utilidades
+    curl \
+    bc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Crear enlaces simbolicos para python3 -> python y pip3 -> pip
+RUN ln -sf /usr/bin/python3 /usr/bin/python && \
+    ln -sf /usr/bin/pip3 /usr/bin/pip
+
+# Verificar instalaciones
+RUN echo "=== Versiones instaladas ===" && \
+    echo "Maven: $(mvn --version 2>&1 | head -1)" && \
+    echo "Python: $(python --version 2>&1)" && \
+    echo "Go: $(go version 2>&1)" && \
+    echo "Node: $(node --version 2>&1)" && \
+    echo "npm: $(npm --version 2>&1)"
+
+USER jenkins

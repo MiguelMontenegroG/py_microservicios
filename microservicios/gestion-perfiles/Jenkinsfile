@@ -6,8 +6,8 @@ pipeline {
         timeout(time: 20, unit: 'MINUTES')
     }
     environment {
-        DOCKER_REGISTRY = 'localhost:5050'
-        SERVICE_NAME = 'gestion-perfiles'
+        REGISTRY = 'localhost:5050'
+        IMAGE_NAME = 'gestion-perfiles'
         DOCKER_BUILDKIT = '1'
     }
     stages {
@@ -54,22 +54,21 @@ pipeline {
         stage('Package') {
             steps {
                 dir('microservicios/gestion-perfiles') {
-                    sh 'docker build -t ${DOCKER_REGISTRY}/${SERVICE_NAME}:${BUILD_NUMBER} .'
-                    sh 'docker tag ${DOCKER_REGISTRY}/${SERVICE_NAME}:${BUILD_NUMBER} ${DOCKER_REGISTRY}/${SERVICE_NAME}:latest'
+                    sh 'docker build -t ${REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER} .'
+                    sh 'docker tag ${REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER} ${REGISTRY}/${IMAGE_NAME}:latest'
                 }
             }
         }
     }
     post {
-        always {
-            junit '**/test-reports/*.xml'
-        }
         failure {
-            echo "Pipeline fallo para ${SERVICE_NAME}"
+            echo "Pipeline fallo para ${IMAGE_NAME}"
         }
         success {
-            echo "Pipeline completado exitosamente para ${SERVICE_NAME}"
+            echo "Pipeline completado exitosamente para ${IMAGE_NAME}"
         }
-        always { cleanWs() }
+        always {
+            cleanWs()
+        }
     }
 }

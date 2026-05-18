@@ -360,7 +360,9 @@ services:
   # ── CI/CD ────────────────────────────────────
 
   jenkins:
-    image: jenkins/jenkins:lts-jdk21
+    build:
+      context: ./observabilidad/cicd
+      dockerfile: Dockerfile.jenkins
     privileged: true
     user: root
     environment:
@@ -374,6 +376,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./observabilidad/cicd/jenkins-casc.yml:/var/jenkins_home/casc_configs/jenkins.yml
       - ./observabilidad/cicd/plugins.txt:/usr/share/jenkins/ref/plugins.txt
+      - ./microservicios:/var/jenkins_home/microservicios:ro
     ports:
       - "9090:8080"
       - "50000:50000"
