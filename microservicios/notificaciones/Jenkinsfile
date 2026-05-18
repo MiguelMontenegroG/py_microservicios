@@ -1,40 +1,57 @@
 pipeline {
     agent any
-
-    environment {
-        DOCKER_REGISTRY = 'localhost:5050'
-        SERVICE_NAME = 'notificaciones'
+    options {
+        timestamps()
+        ansiColor('xterm')
+        timeout(time: 20, unit: 'MINUTES')
     }
-
+    environment {
+        REGISTRY = 'localhost:5050'
+        IMAGE_NAME = 'notificaciones'
+        DOCKER_BUILDKIT = '1'
+    }
     stages {
+        stage('Checkout') {
+            steps { checkout scm }
+        }
         stage('Build') {
             steps {
-                sh 'pip install -r requirements.txt'
+                dir('microservicios/notificaciones') {
+                    sh 'pip install -r requirements.txt --quiet'
+                }
             }
         }
         stage('Test') {
             steps {
-                sh 'pytest --cov=src --cov-report=xml --cov-fail-under=70'
+                dir('microservicios/notificaciones') {
+                    sh 'pytest --cov=src --cov-report=xml -q'
+                }
+            }
+            post {
+                always {
+                    junit 'microservicios/notificaciones/**/test-reports/*.xml'
+                }
             }
         }
         stage('Quality') {
             steps {
-                sh '''
-                    coverage=$(grep -oP 'line-rate="\\K[^"]+' coverage.xml | tail -1)
-                    coverage_pct=$(echo "$coverage * 100" | bc | cut -d. -f1)
-                    echo "Cobertura: ${coverage_pct}%"
-                    if [ "$coverage_pct" -lt 70 ]; then
-                        echo "Cobertura por debajo del 70%"
-                        exit 1
-                    fi
-                '''
+                dir('microservicios/notificaciones') {
+                    sh 'pytest --cov=src --cov-fail-under=70 -q'
+                }
             }
         }
         stage('Package') {
             steps {
-                sh 'docker build -t ${DOCKER_REGISTRY}/${SERVICE_NAME}:${BUILD_NUMBER} .'
-                sh 'docker push ${DOCKER_REGISTRY}/${SERVICE_NAME}:${BUILD_NUMBER}'
+                dir('microservicios/notificaciones') {
+                    sh 'docker build -t ${REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER} .'
+                    sh 'docker tag ${REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER} ${REGISTRY}/${IMAGE_NAME}:latest'
+                }
             }
         }
+    }
+    post {
+        success { echo "Pipeline ${env.IMAGE_NAME} completado exitosamente" }
+        failure { echo "Pipeline ${env.IMAGE_NAME} fallo en stage: ${env.STAGE_NAME}" }
+        always { cleanWs() }
     }
 }

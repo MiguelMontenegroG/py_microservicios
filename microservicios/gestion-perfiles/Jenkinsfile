@@ -1,48 +1,65 @@
 pipeline {
     agent any
-
+    options {
+        timestamps()
+        ansiColor('xterm')
+        timeout(time: 20, unit: 'MINUTES')
+    }
     environment {
         DOCKER_REGISTRY = 'localhost:5050'
         SERVICE_NAME = 'gestion-perfiles'
+        DOCKER_BUILDKIT = '1'
     }
-
     stages {
+        stage('Checkout') {
+            steps { checkout scm }
+        }
         stage('Build') {
             steps {
-                sh 'pip install --no-cache-dir -r requirements.txt'
+                dir('microservicios/gestion-perfiles') {
+                    sh 'pip install --no-cache-dir -r requirements.txt'
+                }
             }
         }
-
         stage('Test') {
             steps {
-                sh 'pytest --cov=src --cov-report=xml --cov-report=term tests/'
+                dir('microservicios/gestion-perfiles') {
+                    sh 'pytest --cov=src --cov-report=xml --cov-report=term tests/'
+                }
+            }
+            post {
+                always {
+                    junit 'microservicios/gestion-perfiles/**/test-reports/*.xml'
+                }
             }
         }
-
         stage('Quality') {
             steps {
-                script {
-                    def coverage = sh(
-                        script: "python -c \"import xml.etree.ElementTree as ET; root = ET.parse('coverage.xml').getroot(); print(root.attrib.get('line-rate', 0))\"",
-                        returnStdout: true
-                    ).trim()
-                    def coveragePercent = (coverage.toFloat() * 100).round(2)
-                    echo "Cobertura actual: ${coveragePercent}%"
-                    if (coveragePercent < 70.0) {
-                        error "Cobertura insuficiente: ${coveragePercent}% (minimo requerido: 70%)"
+                dir('microservicios/gestion-perfiles') {
+                    script {
+                        def coverage = sh(
+                            script: "python -c \"import xml.etree.ElementTree as ET; root = ET.parse('coverage.xml').getroot(); print(root.attrib.get('line-rate', 0))\"",
+                            returnStdout: true
+                        ).trim()
+                        def coveragePercent = (coverage.toFloat() * 100).round(2)
+                        echo "Cobertura actual: ${coveragePercent}%"
+                        if (coveragePercent < 70.0) {
+                            error "Cobertura insuficiente: ${coveragePercent}% (minimo requerido: 70%)"
+                        }
+                        sh 'pytest --cov=src --cov-fail-under=70 -q'
                     }
                 }
             }
         }
-
         stage('Package') {
             steps {
-                sh 'docker build -t ${DOCKER_REGISTRY}/${SERVICE_NAME}:${BUILD_NUMBER} .'
-                sh 'docker push ${DOCKER_REGISTRY}/${SERVICE_NAME}:${BUILD_NUMBER}'
+                dir('microservicios/gestion-perfiles') {
+                    sh 'docker build -t ${DOCKER_REGISTRY}/${SERVICE_NAME}:${BUILD_NUMBER} .'
+                    sh 'docker tag ${DOCKER_REGISTRY}/${SERVICE_NAME}:${BUILD_NUMBER} ${DOCKER_REGISTRY}/${SERVICE_NAME}:latest'
+                }
             }
         }
     }
-
     post {
         always {
             junit '**/test-reports/*.xml'
@@ -53,5 +70,6 @@ pipeline {
         success {
             echo "Pipeline completado exitosamente para ${SERVICE_NAME}"
         }
+        always { cleanWs() }
     }
 }

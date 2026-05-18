@@ -1,39 +1,57 @@
 pipeline {
     agent any
-
-    environment {
-        DOCKER_REGISTRY = 'localhost:5050'
-        SERVICE_NAME = 'gestion-empleados'
+    options {
+        timestamps()
+        ansiColor('xterm')
+        timeout(time: 20, unit: 'MINUTES')
     }
-
+    environment {
+        REGISTRY = 'localhost:5050'
+        IMAGE_NAME = 'gestion-empleados'
+        DOCKER_BUILDKIT = '1'
+    }
     stages {
+        stage('Checkout') {
+            steps { checkout scm }
+        }
         stage('Build') {
             steps {
-                sh 'mvn compile'
+                dir('microservicios/gestion-empleados') {
+                    sh 'mvn clean compile -q'
+                }
             }
         }
         stage('Test') {
             steps {
-                sh 'mvn test'
+                dir('microservicios/gestion-empleados') {
+                    sh 'mvn test'
+                }
+            }
+            post {
+                always {
+                    junit 'microservicios/gestion-empleados/target/surefire-reports/*.xml'
+                }
             }
         }
         stage('Quality') {
             steps {
-                sh 'mvn jacoco:check'
+                dir('microservicios/gestion-empleados') {
+                    sh 'mvn verify -DskipTests jacoco:check'
+                }
             }
         }
         stage('Package') {
             steps {
-                sh 'docker build -t ${DOCKER_REGISTRY}/${SERVICE_NAME}:${BUILD_NUMBER} .'
-                sh 'docker push ${DOCKER_REGISTRY}/${SERVICE_NAME}:${BUILD_NUMBER}'
+                dir('microservicios/gestion-empleados') {
+                    sh 'docker build -t ${REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER} .'
+                    sh 'docker tag ${REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER} ${REGISTRY}/${IMAGE_NAME}:latest'
+                }
             }
         }
     }
-
     post {
-        always {
-            junit 'target/surefire-reports/*.xml'
-            jacoco publisher: [[pattern: 'target/site/jacoco/jacoco.xml']]
-        }
+        success { echo "Pipeline ${env.IMAGE_NAME} completado exitosamente" }
+        failure { echo "Pipeline ${env.IMAGE_NAME} fallo en stage: ${env.STAGE_NAME}" }
+        always { cleanWs() }
     }
 }

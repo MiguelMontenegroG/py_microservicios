@@ -1,0 +1,139 @@
+{
+  "title": "Logs de Microservicios",
+  "uid": "microservicios-logs",
+  "version": 1,
+  "tags": ["microservicios", "logs"],
+  "timezone": "browser",
+  "editable": true,
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Últimos logs",
+      "type": "logs",
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "elasticsearch", "uid": "elasticsearch" },
+      "targets": [
+        {
+          "query": "*",
+          "metrics": [{ "type": "logs", "id": "1" }],
+          "bucketAggs": [{ "type": "date_histogram", "field": "@timestamp", "id": "2" }]
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none",
+        "enableLogDetails": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Errores por servicio (últimas 24h)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "elasticsearch", "uid": "elasticsearch" },
+      "targets": [
+        {
+          "query": "level:ERROR",
+          "metrics": [{ "type": "count", "id": "1" }],
+          "bucketAggs": [
+            {
+              "type": "date_histogram",
+              "field": "@timestamp",
+              "id": "2",
+              "settings": { "interval": "auto" }
+            },
+            {
+              "type": "terms",
+              "field": "service.keyword",
+              "id": "3",
+              "settings": { "size": "10" }
+            }
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineInterpolation": "smooth" }
+        }
+      },
+      "options": {
+        "legend": { "calcs": ["mean", "max", "sum"], "displayMode": "table", "placement": "right" },
+        "tooltip": { "mode": "multi" }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Distribución de logs por nivel",
+      "type": "barchart",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "elasticsearch", "uid": "elasticsearch" },
+      "targets": [
+        {
+          "query": "*",
+          "metrics": [{ "type": "count", "id": "1" }],
+          "bucketAggs": [
+            {
+              "type": "terms",
+              "field": "level.keyword",
+              "id": "2",
+              "settings": { "size": "10" }
+            }
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        }
+      },
+      "options": {
+        "orientation": "horizontal",
+        "groupWidth": 0.7,
+        "showValue": true,
+        "legend": { "displayMode": "hidden" }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Top servicios por volumen de logs",
+      "type": "barchart",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 20 },
+      "datasource": { "type": "elasticsearch", "uid": "elasticsearch" },
+      "targets": [
+        {
+          "query": "*",
+          "metrics": [{ "type": "count", "id": "1" }],
+          "bucketAggs": [
+            {
+              "type": "terms",
+              "field": "service.keyword",
+              "id": "2",
+              "settings": { "size": "10" }
+            }
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        }
+      },
+      "options": {
+        "orientation": "horizontal",
+        "groupWidth": 0.7,
+        "showValue": true,
+        "legend": { "displayMode": "hidden" }
+      }
+    }
+  ]
+}

@@ -1,0 +1,150 @@
+jenkins:
+  systemMessage: "Sistema de Gesti\u00f3n de Empleados - Microservicios"
+  numExecutors: 4
+  scmCheckoutRetryCount: 2
+
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "admin"
+          password: "admin"
+
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+
+  crumbIssuer:
+    standard: {}
+
+unclassified:
+  location:
+    url: "http://localhost:9090/"
+
+jobs:
+  - script: |
+      pipelineJob('gestion-empleados') {
+        description('Pipeline CI/CD para gestion-empleados')
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('https://github.com/MiguelMontenegroG/py_microservicios')
+                  branch('*/master')
+                }
+              }
+            }
+            scriptPath('microservicios/gestion-empleados/Jenkinsfile')
+            lightweight(true)
+          }
+        }
+        triggers {
+          scm('H/5 * * * *')
+        }
+      }
+  - script: |
+      pipelineJob('autenticacion') {
+        description('Pipeline CI/CD para autenticacion')
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('https://github.com/MiguelMontenegroG/py_microservicios')
+                  branch('*/master')
+                }
+              }
+            }
+            scriptPath('microservicios/autenticacion/Jenkinsfile')
+            lightweight(true)
+          }
+        }
+        triggers {
+          scm('H/5 * * * *')
+        }
+      }
+  - script: |
+      pipelineJob('gestion-perfiles') {
+        description('Pipeline CI/CD para gestion-perfiles')
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('https://github.com/MiguelMontenegroG/py_microservicios')
+                  branch('*/master')
+                }
+              }
+            }
+            scriptPath('microservicios/gestion-perfiles/Jenkinsfile')
+            lightweight(true)
+          }
+        }
+        triggers {
+          scm('H/5 * * * *')
+        }
+      }
+  - script: |
+      pipelineJob('gestion-vacaciones') {
+        description('Pipeline CI/CD para gestion-vacaciones')
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('https://github.com/MiguelMontenegroG/py_microservicios')
+                  branch('*/master')
+                }
+              }
+            }
+            scriptPath('microservicios/gestion-vacaciones/Jenkinsfile')
+            lightweight(true)
+          }
+        }
+        triggers {
+          scm('H/5 * * * *')
+        }
+      }
+  - script: |
+      pipelineJob('notificaciones') {
+        description('Pipeline CI/CD para notificaciones')
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('https://github.com/MiguelMontenegroG/py_microservicios')
+                  branch('*/master')
+                }
+              }
+            }
+            scriptPath('microservicios/notificaciones/Jenkinsfile')
+            lightweight(true)
+          }
+        }
+        triggers {
+          scm('H/5 * * * *')
+        }
+      }
+  - script: |
+      pipelineJob('api-gateway') {
+        description('Pipeline CI/CD para api-gateway')
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('https://github.com/MiguelMontenegroG/py_microservicios')
+                  branch('*/master')
+                }
+              }
+            }
+            scriptPath('microservicios/api-gateway/Jenkinsfile')
+            lightweight(true)
+          }
+        }
+        triggers {
+          scm('H/5 * * * *')
+        }
+      }

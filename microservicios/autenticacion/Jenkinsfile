@@ -1,15 +1,24 @@
 pipeline {
     agent any
-
-    environment {
-        DOCKER_REGISTRY = 'localhost:5050'
-        SERVICE_NAME = 'autenticacion'
+    options {
+        timestamps()
+        ansiColor('xterm')
+        timeout(time: 20, unit: 'MINUTES')
     }
-
+    environment {
+        REGISTRY = 'localhost:5050'
+        IMAGE_NAME = 'autenticacion'
+        DOCKER_BUILDKIT = '1'
+    }
     stages {
+        stage('Checkout') {
+            steps { checkout scm }
+        }
         stage('Build') {
             steps {
-                sh 'mvn compile'
+                dir('microservicios/autenticacion') {
+                    sh 'mvn clean compile -q'
+                }
             }
             post {
                 success {
@@ -23,18 +32,22 @@ pipeline {
 
         stage('Test') {
             steps {
-                sh 'mvn test'
+                dir('microservicios/autenticacion') {
+                    sh 'mvn test'
+                }
             }
             post {
-                success {
-                    junit 'target/surefire-reports/*.xml'
+                always {
+                    junit 'microservicios/autenticacion/target/surefire-reports/*.xml'
                 }
             }
         }
 
         stage('Quality') {
             steps {
-                sh 'mvn jacoco:check'
+                dir('microservicios/autenticacion') {
+                    sh 'mvn verify -DskipTests jacoco:check'
+                }
             }
             post {
                 success {
@@ -48,8 +61,10 @@ pipeline {
 
         stage('Package') {
             steps {
-                sh 'docker build -t ${DOCKER_REGISTRY}/${SERVICE_NAME}:${BUILD_NUMBER} .'
-                sh 'docker push ${DOCKER_REGISTRY}/${SERVICE_NAME}:${BUILD_NUMBER}'
+                dir('microservicios/autenticacion') {
+                    sh 'docker build -t ${REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER} .'
+                    sh 'docker tag ${REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER} ${REGISTRY}/${IMAGE_NAME}:latest'
+                }
             }
             post {
                 success {
@@ -64,10 +79,10 @@ pipeline {
             cleanWs()
         }
         success {
-            echo "Pipeline completado exitosamente para ${SERVICE_NAME}:${BUILD_NUMBER}"
+            echo "Pipeline ${env.IMAGE_NAME} completado exitosamente"
         }
         failure {
-            echo "Pipeline fallo para ${SERVICE_NAME}:${BUILD_NUMBER}"
+            echo "Pipeline ${env.IMAGE_NAME} fallo en stage: ${env.STAGE_NAME}"
         }
     }
 }
