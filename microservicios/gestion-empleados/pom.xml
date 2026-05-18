@@ -140,6 +140,10 @@
                         <testcontainers.ryuk.disabled>true</testcontainers.ryuk.disabled>
                         <testcontainers.reuse.enable>false</testcontainers.reuse.enable>
                     </systemPropertyVariables>
+                    <excludes>
+                        <exclude>**/*IntegrationTest.java</exclude>
+                        <exclude>**/*IntegrationTests.java</exclude>
+                    </excludes>
                 </configuration>
             </plugin>
             <plugin>

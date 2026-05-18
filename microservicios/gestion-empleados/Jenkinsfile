@@ -30,7 +30,7 @@ pipeline {
         stage('Unit Tests') {
             steps {
                 dir('microservicios/gestion-empleados') {
-                    sh "mvn test -Dtest='*Test,*Tests' -DfailIfNoTests=false"
+                    sh "mvn test -DfailIfNoTests=false"
                 }
             }
             post {

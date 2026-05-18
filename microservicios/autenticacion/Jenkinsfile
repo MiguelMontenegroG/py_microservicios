@@ -8,7 +8,7 @@ pipeline {
     environment {
         REGISTRY = 'localhost:5050'
         IMAGE_NAME = 'autenticacion'
-        DOCKER_BUILDKIT = '1'
+        DOCKER_BUILDKIT = '0'
         // Deshabilitar Ryuk (Testcontainers) para entornos Docker-in-Docker
         TESTCONTAINERS_RYUK_DISABLED = 'true'
         TESTCONTAINERS_REUSE_ENABLE = 'false'
@@ -35,7 +35,7 @@ pipeline {
         stage('Unit Tests') {
             steps {
                 dir('microservicios/autenticacion') {
-                    sh 'mvn test -Dtest="*Test,*Tests" -DfailIfNoTests=false'
+                    sh 'mvn test -DfailIfNoTests=false'
                 }
             }
             post {
@@ -47,7 +47,7 @@ pipeline {
         stage('Integration Tests') {
             steps {
                 dir('microservicios/autenticacion') {
-                    sh 'mvn test -Dtest="*IntegrationTest,*IntegrationTests" -DfailIfNoTests=false -Dtestcontainers.ryuk.disabled=true -Dtestcontainers.reuse.enable=false'
+                    sh "mvn test -Dtest='*IntegrationTest,*IntegrationTests' -DfailIfNoTests=false"
                 }
             }
             post {
