@@ -8,7 +8,7 @@ pipeline {
     environment {
         REGISTRY = 'localhost:5050'
         IMAGE_NAME = 'gestion-vacaciones'
-        DOCKER_BUILDKIT = '1'
+        DOCKER_BUILDKIT = '0'
         GOFLAGS = '-mod=mod'
         GOPATH = "${WORKSPACE}/.go"
         GOMODCACHE = "${WORKSPACE}/.go/mod"
