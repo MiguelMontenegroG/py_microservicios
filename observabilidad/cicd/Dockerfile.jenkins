@@ -4,6 +4,9 @@ USER root
 
 # Instalar herramientas necesarias para los pipelines
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Docker CLI (para Testcontainers, docker build, docker compose)
+    docker-cli \
+    docker-compose \
     # Maven (Java)
     maven \
     # Python 3 y pip
@@ -30,6 +33,7 @@ RUN echo "=== Versiones instaladas ===" && \
     echo "Python: $(python --version 2>&1)" && \
     echo "Go: $(go version 2>&1)" && \
     echo "Node: $(node --version 2>&1)" && \
-    echo "npm: $(npm --version 2>&1)"
+    echo "npm: $(npm --version 2>&1)" && \
+    echo "Docker: $(docker --version 2>&1)"
 
 USER jenkins

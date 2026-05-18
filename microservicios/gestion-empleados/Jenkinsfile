@@ -9,6 +9,12 @@ pipeline {
         REGISTRY = 'localhost:5050'
         IMAGE_NAME = 'gestion-empleados'
         DOCKER_BUILDKIT = '1'
+        // Deshabilitar Ryuk (contenedor auxiliar de Testcontainers) porque
+        // en entornos Docker-in-Docker no puede conectarse correctamente.
+        // Los contenedores se limpiarán automáticamente al finalizar el pipeline.
+        TESTCONTAINERS_RYUK_DISABLED = 'true'
+        // Deshabilitar reuse de contenedores para entornos CI
+        TESTCONTAINERS_REUSE_ENABLE = 'false'
     }
     stages {
         stage('Checkout') {
@@ -21,10 +27,22 @@ pipeline {
                 }
             }
         }
-        stage('Test') {
+        stage('Unit Tests') {
             steps {
                 dir('microservicios/gestion-empleados') {
-                    sh 'mvn test'
+                    sh 'mvn test -Dtest="*Test,*Tests" -DfailIfNoTests=false'
+                }
+            }
+            post {
+                always {
+                    junit 'microservicios/gestion-empleados/target/surefire-reports/*.xml'
+                }
+            }
+        }
+        stage('Integration Tests') {
+            steps {
+                dir('microservicios/gestion-empleados') {
+                    sh 'mvn test -Dtest="*IntegrationTest,*IntegrationTests" -DfailIfNoTests=false -Dtestcontainers.ryuk.disabled=true -Dtestcontainers.reuse.enable=false'
                 }
             }
             post {
@@ -36,7 +54,7 @@ pipeline {
         stage('Quality') {
             steps {
                 dir('microservicios/gestion-empleados') {
-                    sh 'mvn verify -DskipTests jacoco:check'
+                    sh 'mvn jacoco:report jacoco:check -DskipTests'
                 }
             }
         }

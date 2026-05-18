@@ -14,8 +14,9 @@ jenkins:
     loggedInUsersCanDoAnything:
       allowAnonymousRead: false
 
-  crumbIssuer:
-    standard: {}
+  # crumbIssuer desactivado para facilitar pruebas locales
+  # crumbIssuer:
+  #   standard: {}
 
 unclassified:
   location:
