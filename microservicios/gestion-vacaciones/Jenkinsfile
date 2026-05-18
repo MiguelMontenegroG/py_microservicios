@@ -9,10 +9,15 @@ pipeline {
         REGISTRY = 'localhost:5050'
         IMAGE_NAME = 'gestion-vacaciones'
         DOCKER_BUILDKIT = '1'
+        GOFLAGS = '-mod=mod'
+        GOPATH = "${WORKSPACE}/.go"
+        GOMODCACHE = "${WORKSPACE}/.go/mod"
     }
     stages {
         stage('Checkout') {
-            steps { checkout scm }
+            steps {
+                checkout scm
+            }
         }
         stage('Build') {
             steps {
@@ -32,7 +37,8 @@ pipeline {
             }
             post {
                 always {
-                    junit 'report.xml'
+                    echo "Tests completados. Los resultados se muestran arriba en la consola."
+                    sh 'rm -f test_output.txt'
                 }
             }
         }
@@ -40,6 +46,10 @@ pipeline {
             steps {
                 dir('microservicios/gestion-vacaciones') {
                     sh """
+                        if [ ! -f coverage.out ]; then
+                            echo "ERROR: Archivo coverage.out no encontrado"
+                            exit 1
+                        fi
                         COBERTURA=\$(go tool cover -func=coverage.out | grep total | awk '{print \$3}' | sed 's/%//')
                         echo "Cobertura: \${COBERTURA}%"
                         if [ \$(echo "\${COBERTURA} < 70" | bc -l) -eq 1 ]; then
