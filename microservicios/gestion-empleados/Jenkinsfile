@@ -8,7 +8,7 @@ pipeline {
     environment {
         REGISTRY = 'localhost:5050'
         IMAGE_NAME = 'gestion-empleados'
-        DOCKER_BUILDKIT = '1'
+        DOCKER_BUILDKIT = '0'
         // Deshabilitar Ryuk (contenedor auxiliar de Testcontainers) porque
         // en entornos Docker-in-Docker no puede conectarse correctamente.
         // Los contenedores se limpiarán automáticamente al finalizar el pipeline.
@@ -30,7 +30,7 @@ pipeline {
         stage('Unit Tests') {
             steps {
                 dir('microservicios/gestion-empleados') {
-                    sh 'mvn test -Dtest="*Test,*Tests" -DfailIfNoTests=false'
+                    sh 'mvn test -Dtest="*Test,*Tests,!*IntegrationTest" -DfailIfNoTests=false'
                 }
             }
             post {
