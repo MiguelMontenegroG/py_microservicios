@@ -1,0 +1,59 @@
+pipeline {
+  agent any
+
+  environment {
+    REGISTRY = 'localhost:5050'
+    IMAGE_NAME = 'api-gateway'
+  }
+
+  stages {
+    stage('Build') {
+      steps {
+        sh 'npm ci'
+      }
+    }
+
+    stage('Test') {
+      steps {
+        sh 'npm test -- --coverage'
+      }
+      post {
+        always {
+          junit 'reports/*.xml'
+        }
+      }
+    }
+
+    stage('Quality') {
+      steps {
+        script {
+          def coverage = sh(
+            script: "grep -oP '<coverage line-rate=\"\\K[^\"]+' coverage/cobertura-coverage.xml || echo '0'",
+            returnStdout: true
+          ).trim()
+          def coveragePercent = (coverage.toFloat() * 100).round(2)
+          echo "Cobertura actual: ${coveragePercent}%"
+          if (coveragePercent < 70) {
+            error "Cobertura de tests menor al 70%: ${coveragePercent}%"
+          }
+        }
+      }
+    }
+
+    stage('Package') {
+      steps {
+        sh 'docker build -t ${REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER} .'
+        sh 'docker push ${REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER}'
+      }
+    }
+  }
+
+  post {
+    failure {
+      echo 'Pipeline fallido para api-gateway'
+    }
+    success {
+      echo 'Pipeline completado exitosamente para api-gateway'
+    }
+  }
+}

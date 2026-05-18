@@ -1,0 +1,795 @@
+openapi: "3.0.3"
+info:
+  title: API Gateway - Sistema de Microservicios
+  description: Punto de entrada unico para el sistema de gestion empresarial.
+    Proxea requests a los microservicios internos y compone respuestas cuando es necesario.
+  version: "1.0.0"
+  contact:
+    name: Equipo de Desarrollo
+
+servers:
+  - url: http://localhost:8080
+    description: Desarrollo local
+  - url: http://api-gateway:8080
+    description: Docker Compose
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT obtenido de POST /auth/login
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "EMPLEADO_NO_ENCONTRADO"
+            message:
+              type: string
+              example: "El empleado con id X no existe"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+        timestamp:
+          type: string
+          format: date-time
+
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          example: "admin@empresa.com"
+        password:
+          type: string
+          example: "Admin123!"
+
+    LoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            token:
+              type: string
+              example: "eyJhbGciOiJIUzI1NiJ9..."
+            expiresIn:
+              type: integer
+              example: 86400
+
+    ChangePasswordRequest:
+      type: object
+      required:
+        - currentPassword
+        - newPassword
+      properties:
+        currentPassword:
+          type: string
+          example: "OldPass123!"
+        newPassword:
+          type: string
+          example: "NewPass456!"
+
+    CreateEmpleadoRequest:
+      type: object
+      required:
+        - nombre
+        - apellido
+        - email
+        - numeroEmpleado
+        - fechaIngreso
+      properties:
+        nombre:
+          type: string
+          example: "Juan"
+        apellido:
+          type: string
+          example: "Perez"
+        email:
+          type: string
+          format: email
+          example: "juan.perez@empresa.com"
+        numeroEmpleado:
+          type: string
+          example: "EMP-001"
+        cargo:
+          type: string
+          example: "Desarrollador Senior"
+        area:
+          type: string
+          example: "Tecnologia"
+        fechaIngreso:
+          type: string
+          format: date
+          example: "2024-01-15"
+
+    UpdateEmpleadoRequest:
+      type: object
+      properties:
+        nombre:
+          type: string
+          example: "Juan Carlos"
+        apellido:
+          type: string
+          example: "Perez Garcia"
+        cargo:
+          type: string
+          example: "Tech Lead"
+        area:
+          type: string
+          example: "Arquitectura"
+
+    EmpleadoResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        nombre:
+          type: string
+          example: "Juan"
+        apellido:
+          type: string
+          example: "Perez"
+        email:
+          type: string
+          example: "juan.perez@empresa.com"
+        numeroEmpleado:
+          type: string
+          example: "EMP-001"
+        cargo:
+          type: string
+          example: "Desarrollador Senior"
+        area:
+          type: string
+          example: "Tecnologia"
+        fechaIngreso:
+          type: string
+          format: date
+          example: "2024-01-15"
+        estado:
+          type: string
+          enum: [ACTIVO, EN_VACACIONES, RETIRADO]
+          example: "ACTIVO"
+
+    EmpleadoWithPerfilResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        nombre:
+          type: string
+        apellido:
+          type: string
+        email:
+          type: string
+        perfil:
+          type: object
+          nullable: true
+          properties:
+            empleadoId:
+              type: string
+              format: uuid
+            foto:
+              type: string
+              nullable: true
+            biografia:
+              type: string
+              nullable: true
+            telefono:
+              type: string
+              nullable: true
+            direccion:
+              type: object
+              nullable: true
+            redesSociales:
+              type: object
+              nullable: true
+
+    ProfileResponse:
+      type: object
+      properties:
+        empleadoId:
+          type: string
+          format: uuid
+        email:
+          type: string
+        foto:
+          type: string
+          nullable: true
+        biografia:
+          type: string
+          nullable: true
+        telefono:
+          type: string
+          nullable: true
+        direccion:
+          type: object
+          nullable: true
+        redesSociales:
+          type: object
+          nullable: true
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        foto:
+          type: string
+          nullable: true
+        biografia:
+          type: string
+          nullable: true
+        telefono:
+          type: string
+          nullable: true
+        direccion:
+          type: object
+          properties:
+            calle:
+              type: string
+            ciudad:
+              type: string
+            codigoPostal:
+              type: string
+            pais:
+              type: string
+        redesSociales:
+          type: object
+          properties:
+            linkedin:
+              type: string
+              nullable: true
+            github:
+              type: string
+              nullable: true
+
+    CreateVacacionRequest:
+      type: object
+      required:
+        - empleadoId
+        - fechaInicio
+        - fechaFin
+      properties:
+        empleadoId:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        fechaInicio:
+          type: string
+          format: date
+          example: "2024-07-01"
+        fechaFin:
+          type: string
+          format: date
+          example: "2024-07-15"
+
+    VacacionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        empleadoId:
+          type: string
+          format: uuid
+        fechaInicio:
+          type: string
+          format: date
+        fechaFin:
+          type: string
+          format: date
+        estado:
+          type: string
+          enum: [PROGRAMADA, ACTIVA, COMPLETADA, CANCELADA]
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "UP"
+        service:
+          type: string
+          example: "api-gateway"
+        version:
+          type: string
+          example: "1.0.0"
+        timestamp:
+          type: string
+          format: date-time
+        dependencies:
+          type: object
+          properties:
+            autenticacion:
+              type: string
+              example: "UP"
+            gestion-empleados:
+              type: string
+              example: "UP"
+            gestion-perfiles:
+              type: string
+              example: "DOWN"
+            gestion-vacaciones:
+              type: string
+              example: "UP"
+            notificaciones:
+              type: string
+              example: "UP"
+
+paths:
+  /health:
+    get:
+      tags:
+        - Salud
+      summary: Health check del gateway
+      description: Verifica el estado del gateway y de todos los microservicios internos
+      responses:
+        "200":
+          description: Estado del gateway y sus dependencias
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /metrics:
+    get:
+      tags:
+        - Monitoreo
+      summary: Metricas Prometheus
+      description: Expone metricas en formato Prometheus
+      responses:
+        "200":
+          description: Metricas en formato texto Prometheus
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /api-docs:
+    get:
+      tags:
+        - Documentacion
+      summary: Swagger UI
+      description: Interfaz grafica de documentacion OpenAPI
+      responses:
+        "200":
+          description: Swagger UI
+
+  /auth/login:
+    post:
+      tags:
+        - Autenticacion
+      summary: Iniciar sesion
+      description: Autentica un usuario y devuelve un token JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        "200":
+          description: Login exitoso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        "401":
+          description: Credenciales invalidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/change-password:
+    post:
+      tags:
+        - Autenticacion
+      summary: Cambiar contrasena
+      description: Cambia la contrasena del usuario autenticado
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        "200":
+          description: Contrasena cambiada exitosamente
+        "400":
+          description: Contrasena actual incorrecta o nueva no valida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /employees:
+    get:
+      tags:
+        - Empleados
+      summary: Listar empleados
+      description: Obtiene una lista paginada de empleados
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 0
+          description: Numero de pagina
+        - in: query
+          name: size
+          schema:
+            type: integer
+            default: 10
+          description: Tamano de pagina
+      responses:
+        "200":
+          description: Lista de empleados
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EmpleadoResponse'
+                  timestamp:
+                    type: string
+                    format: date-time
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags:
+        - Empleados
+      summary: Crear empleado
+      description: Crea un nuevo empleado y publica evento empleado.creado
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEmpleadoRequest'
+      responses:
+        "201":
+          description: Empleado creado exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/EmpleadoResponse'
+                  timestamp:
+                    type: string
+                    format: date-time
+        "400":
+          description: Datos invalidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /employees/{id}:
+    get:
+      tags:
+        - Empleados
+      summary: Obtener empleado con perfil
+      description: Obtiene un empleado por su ID incluyendo datos del perfil (endpoint composite)
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID del empleado
+      responses:
+        "200":
+          description: Empleado encontrado con perfil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/EmpleadoWithPerfilResponse'
+                  timestamp:
+                    type: string
+                    format: date-time
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "404":
+          description: Empleado no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags:
+        - Empleados
+      summary: Actualizar empleado
+      description: Actualiza los datos de un empleado existente
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateEmpleadoRequest'
+      responses:
+        "200":
+          description: Empleado actualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/EmpleadoResponse'
+        "401":
+          description: No autenticado
+        "404":
+          description: Empleado no encontrado
+
+    delete:
+      tags:
+        - Empleados
+      summary: Eliminar empleado (soft delete)
+      description: Realiza un soft delete del empleado cambiando su estado a RETIRADO
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Empleado eliminado (sin contenido)
+        "401":
+          description: No autenticado
+        "404":
+          description: Empleado no encontrado
+
+  /profile:
+    get:
+      tags:
+        - Perfiles
+      summary: Obtener mi perfil
+      description: Obtiene el perfil del empleado autenticado (empleadoId del JWT)
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Perfil encontrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/ProfileResponse'
+        "401":
+          description: No autenticado
+        "404":
+          description: Perfil no encontrado
+
+    put:
+      tags:
+        - Perfiles
+      summary: Actualizar mi perfil
+      description: Actualiza el perfil del empleado autenticado
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        "200":
+          description: Perfil actualizado
+        "401":
+          description: No autenticado
+        "404":
+          description: Perfil no encontrado
+
+  /vacations:
+    get:
+      tags:
+        - Vacaciones
+      summary: Listar vacaciones
+      description: Obtiene lista de vacaciones, opcionalmente filtradas por empleadoId
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: empleadoId
+          schema:
+            type: string
+            format: uuid
+          description: Filtrar por ID de empleado
+      responses:
+        "200":
+          description: Lista de vacaciones
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/VacacionResponse'
+        "401":
+          description: No autenticado
+
+    post:
+      tags:
+        - Vacaciones
+      summary: Programar vacaciones
+      description: Crea una nueva solicitud de vacaciones
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVacacionRequest'
+      responses:
+        "201":
+          description: Vacaciones programadas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/VacacionResponse'
+        "400":
+          description: Datos invalidos o solapamiento de fechas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: No autenticado
+
+  /vacations/{id}:
+    get:
+      tags:
+        - Vacaciones
+      summary: Obtener vacacion
+      description: Obtiene una vacacion por su ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Vacacion encontrada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/VacacionResponse'
+        "401":
+          description: No autenticado
+        "404":
+          description: Vacacion no encontrada
+
+    delete:
+      tags:
+        - Vacaciones
+      summary: Cancelar vacacion
+      description: Cancela una vacacion existente
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Vacacion cancelada (sin contenido)
+        "401":
+          description: No autenticado
+        "404":
+          description: Vacacion no encontrada

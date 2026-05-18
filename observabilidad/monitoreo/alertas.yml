@@ -1,0 +1,41 @@
+groups:
+  - name: microservicios_alertas
+    rules:
+      - alert: ServicioDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Servicio {{ $labels.job }} está caído"
+          description: "El microservicio {{ $labels.job }} lleva más de 1 minuto sin responder."
+
+      - alert: AltaTasaErrores
+        expr: |
+          sum(rate(gateway_http_requests_total{status=~"5.."}[5m])) /
+          sum(rate(gateway_http_requests_total[5m])) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tasa de error superior al 5%"
+          description: "Más del 5% de las peticiones al API Gateway están fallando."
+
+      - alert: AltaLatencia
+        expr: |
+          histogram_quantile(0.95, sum(rate(gateway_http_request_duration_seconds_bucket[5m])) by (le)) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Latencia P95 superior a 2 segundos"
+          description: "El 95% de las peticiones tardan más de 2 segundos."
+
+      - alert: AltaMemoriaJVM
+        expr: |
+          jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"} > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Memoria heap JVM superior al 85% en {{ $labels.job }}"
