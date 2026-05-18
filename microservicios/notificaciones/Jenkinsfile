@@ -17,14 +17,16 @@ pipeline {
         stage('Build') {
             steps {
                 dir('microservicios/notificaciones') {
-                    sh 'pip install -r requirements.txt --quiet'
+                    // Crear entorno virtual para evitar el error "externally-managed-environment" (PEP 668)
+                    sh 'python3 -m venv venv'
+                    sh '. venv/bin/activate && pip install -r requirements.txt --quiet'
                 }
             }
         }
         stage('Test') {
             steps {
                 dir('microservicios/notificaciones') {
-                    sh 'pytest --cov=src --cov-report=xml -q'
+                    sh '. venv/bin/activate && pytest --cov=src --cov-report=xml -q'
                 }
             }
             post {
@@ -36,7 +38,7 @@ pipeline {
         stage('Quality') {
             steps {
                 dir('microservicios/notificaciones') {
-                    sh 'pytest --cov=src --cov-fail-under=70 -q'
+                    sh '. venv/bin/activate && pytest --cov=src --cov-fail-under=70 -q'
                 }
             }
         }
