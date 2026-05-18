@@ -27,10 +27,22 @@ pipeline {
                 }
             }
         }
-        stage('Test') {
+        stage('Unit Tests') {
             steps {
                 dir('microservicios/gestion-empleados') {
-                    sh "mvn test -Dtest='%regex[.*(?<!Integration)Test],%regex[.*(?<!Integration)Tests]' -DfailIfNoTests=false"
+                    sh "mvn test -Dtest='*Test,*Tests' -DfailIfNoTests=false"
+                }
+            }
+            post {
+                always {
+                    junit 'microservicios/gestion-empleados/target/surefire-reports/*.xml'
+                }
+            }
+        }
+        stage('Integration Tests') {
+            steps {
+                dir('microservicios/gestion-empleados') {
+                    sh "mvn test -Dtest='*IntegrationTest,*IntegrationTests' -DfailIfNoTests=false"
                 }
             }
             post {
