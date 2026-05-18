@@ -27,6 +27,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN ln -sf /usr/bin/python3 /usr/bin/python && \
     ln -sf /usr/bin/pip3 /usr/bin/pip
 
+# Deshabilitar Ryuk globalmente para Testcontainers
+# Ryuk (contenedor auxiliar de limpieza) no funciona en entornos Docker-in-Docker
+# porque no puede conectar al host Docker correctamente.
+# Los contenedores se limpiarán automáticamente al finalizar el pipeline.
+RUN mkdir -p /root && echo "ryuk.disabled=true" > /root/.testcontainers.properties && \
+    chmod 644 /root/.testcontainers.properties && \
+    mkdir -p /home/jenkins && echo "ryuk.disabled=true" > /home/jenkins/.testcontainers.properties && \
+    chown jenkins:jenkins /home/jenkins/.testcontainers.properties && \
+    chmod 644 /home/jenkins/.testcontainers.properties
+
 # Verificar instalaciones
 RUN echo "=== Versiones instaladas ===" && \
     echo "Maven: $(mvn --version 2>&1 | head -1)" && \
