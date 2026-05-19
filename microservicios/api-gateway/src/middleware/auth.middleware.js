@@ -27,19 +27,20 @@ async function authMiddleware(req, res, next) {
 
     const data = response.data;
 
-    if (!data || !data.valid) {
+    // La respuesta del auth-service tiene estructura { success: true, data: { valid: true, ... } }
+    if (!data || !data.data || !data.data.valid) {
       return res.status(401).json({
         success: false,
         error: {
           code: 'TOKEN_INVALIDO',
-          message: data?.reason || 'El token proporcionado no es valido',
+          message: data?.data?.reason || 'El token proporcionado no es valido',
         },
         timestamp: new Date().toISOString(),
       });
     }
 
-    req.empleadoId = data.empleadoId;
-    req.rol = data.rol || 'EMPLEADO';
+    req.empleadoId = data.data.empleadoId;
+    req.rol = data.data.rol || 'EMPLEADO';
 
     // Agregar headers para microservicios internos
     req.headers['X-Empleado-Id'] = req.empleadoId;

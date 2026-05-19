@@ -7,13 +7,9 @@ pipeline {
     }
     environment {
         REGISTRY = 'localhost:5050'
-        IMAGE_NAME = 'gestion-empleados'
+        IMAGE_NAME = 'autenticacion'
         DOCKER_BUILDKIT = '0'
-        // Deshabilitar Ryuk (contenedor auxiliar de Testcontainers) porque
-        // en entornos Docker-in-Docker no puede conectarse correctamente.
-        // Los contenedores se limpiarán automáticamente al finalizar el pipeline.
         TESTCONTAINERS_RYUK_DISABLED = 'true'
-        // Deshabilitar reuse de contenedores para entornos CI
         TESTCONTAINERS_REUSE_ENABLE = 'false'
     }
     stages {
@@ -22,55 +18,55 @@ pipeline {
         }
         stage('Build') {
             steps {
-                dir('microservicios/gestion-empleados') {
+                dir('microservicios/autenticacion') {
                     sh 'mvn clean compile -q'
                 }
             }
         }
         stage('Unit Tests') {
             steps {
-                dir('microservicios/gestion-empleados') {
+                dir('microservicios/autenticacion') {
                     sh "mvn test -DfailIfNoTests=false"
                 }
             }
             post {
                 always {
-                    junit 'microservicios/gestion-empleados/target/surefire-reports/*.xml'
+                    junit 'microservicios/autenticacion/target/surefire-reports/*.xml'
                 }
             }
         }
         stage('Integration Tests') {
             steps {
-                dir('microservicios/gestion-empleados') {
+                dir('microservicios/autenticacion') {
                     catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
                         sh """
                             echo "=== Ejecutando Integration Tests (Testcontainers) ==="
-                        mvn test -Dtest='*IntegrationTest,*IntegrationTests' -DfailIfNoTests=false \\
-                            -Dtestcontainers.ryuk.disabled=true \\
-                            -Dtestcontainers.reuse.enable=false
-                    """
+                            mvn test -Dtest='*IntegrationTest,*IntegrationTests' -DfailIfNoTests=false \\
+                                -Dtestcontainers.ryuk.disabled=true \\
+                                -Dtestcontainers.reuse.enable=false
+                        """
+                    }
                 }
-            }
             }
             post {
-                always { junit 'microservicios/gestion-empleados/target/surefire-reports/*.xml' }
-                }
+                always { junit 'microservicios/autenticacion/target/surefire-reports/*.xml' }
             }
+        }
         stage('Quality') {
             steps {
-                dir('microservicios/gestion-empleados') {
+                dir('microservicios/autenticacion') {
                     sh 'mvn jacoco:report jacoco:check -DskipTests'
                 }
             }
         }
         stage('Package') {
             steps {
-                dir('microservicios/gestion-empleados') {
+                dir('microservicios/autenticacion') {
                     sh 'docker build -t ${REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER} .'
                     sh 'docker tag ${REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER} ${REGISTRY}/${IMAGE_NAME}:latest'
-    }
-    }
-}
+                }
+            }
+        }
     }
     post {
         success { echo "Pipeline ${env.IMAGE_NAME} completado exitosamente" }
