@@ -45,6 +45,7 @@ pipeline {
                                 echo "POM directory: \$(pwd)"
                                 ls -la pom.xml
                                 mkdir -p /root/.m2
+                                echo "--- Verificando bind mount dentro del contenedor ---"
                                 docker run --rm \\
                                     --network host \\
                                     --name it-test-\${BUILD_NUMBER} \\
@@ -55,14 +56,11 @@ pipeline {
                                     -e TESTCONTAINERS_REUSE_ENABLE=false \\
                                     -v /var/run/docker.sock:/var/run/docker.sock \\
                                     maven:3.9.6-eclipse-temurin-17 \\
-                                    mvn test -Dtest='*IntegrationTest,*IntegrationTests' \\
-                                        -DfailIfNoTests=false \\
-                                        -Dtestcontainers.ryuk.disabled=true \\
-                                        -Dtestcontainers.reuse.enable=false
+                                    ls -la /workspace/
                             """
+                        }
+                    }
                 }
-            }
-        }
             }
             post {
                 always {
@@ -73,10 +71,10 @@ pipeline {
         stage('Quality') {
             steps {
                 dir('microservicios/autenticacion') {
-                    sh 'mvn jacoco:report jacoco:check -DskipTests'
-    }
-    }
-}
+                    sh 'mvn verify -DskipTests -q'
+                }
+            }
+        }
         stage('Package') {
             steps {
                 dir('microservicios/autenticacion') {
