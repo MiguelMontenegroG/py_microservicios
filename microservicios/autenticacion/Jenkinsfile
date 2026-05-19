@@ -25,28 +25,10 @@ pipeline {
         }
         stage('Unit Tests') {
             steps {
-                dir('microservicios/autenticacion') {
-                    sh "mvn test -DfailIfNoTests=false"
-                }
-            }
-            post {
-                always {
-                    junit 'microservicios/autenticacion/target/surefire-reports/*.xml'
-                }
-            }
-        }
-        stage('Integration Tests') {
-            steps {
                 script {
                     catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
                 dir('microservicios/autenticacion') {
-                            sh """
-                                echo "=== Ejecutando Integration Tests directamente ==="
-                                mvn test -Dtest='*IntegrationTest,*IntegrationTests' \\
-                                    -DfailIfNoTests=false \\
-                                    -Dtestcontainers.ryuk.disabled=true \\
-                                    -Dtestcontainers.reuse.enable=false
-                            """
+                            sh "mvn test -Dtest='!*IntegrationTest,!*IntegrationTests' -DfailIfNoTests=false"
                         }
                     }
                 }
@@ -56,6 +38,25 @@ pipeline {
                     junit 'microservicios/autenticacion/target/surefire-reports/*.xml'
 }
             }
+        }
+        stage('Integration Tests') {
+            steps {
+                script {
+                    catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                dir('microservicios/autenticacion') {
+                            sh """
+                                mvn test -Dtest='*IntegrationTest,*IntegrationTests' \\
+                                    -DfailIfNoTests=false
+                            """
+}
+            }
+        }
+    }
+    post {
+                always {
+                    junit 'microservicios/autenticacion/target/surefire-reports/*.xml'
+    }
+}
         }
         stage('Quality') {
             steps {
@@ -69,7 +70,7 @@ pipeline {
                 dir('microservicios/autenticacion') {
                     sh 'docker build -t ${REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER} .'
                     sh 'docker tag ${REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER} ${REGISTRY}/${IMAGE_NAME}:latest'
-}
+                }
             }
         }
     }
