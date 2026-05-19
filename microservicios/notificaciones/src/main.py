@@ -38,18 +38,23 @@ async def lifespan(app: FastAPI):
     logger.info("Iniciando servicio de notificaciones...")
 
     # Iniciar consumers en background
-    from src.consumers.vacaciones_consumer import start_all_consumers
+    from src.consumers.cuenta_consumer import start_all_cuenta_consumers
+    from src.consumers.vacaciones_consumer import start_vacaciones_consumer
 
-    consumer_task = asyncio.create_task(start_all_consumers())
+    tasks = [
+        asyncio.create_task(start_all_cuenta_consumers()),
+        asyncio.create_task(start_vacaciones_consumer()),
+    ]
 
     yield
 
     logger.info("Deteniendo servicio de notificaciones...")
-    consumer_task.cancel()
-    try:
-        await consumer_task
-    except asyncio.CancelledError:
-        pass
+    for task in tasks:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
     logger.info("Servicio detenido correctamente")
 
 

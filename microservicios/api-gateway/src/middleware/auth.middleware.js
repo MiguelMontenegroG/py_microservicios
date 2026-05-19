@@ -25,14 +25,14 @@ async function authMiddleware(req, res, next) {
       { timeout: 3000 }
     );
 
-    const { data } = response.data;
+    const data = response.data;
 
     if (!data || !data.valid) {
       return res.status(401).json({
         success: false,
         error: {
           code: 'TOKEN_INVALIDO',
-          message: data.reason || 'El token proporcionado no es valido',
+          message: data?.reason || 'El token proporcionado no es valido',
         },
         timestamp: new Date().toISOString(),
       });

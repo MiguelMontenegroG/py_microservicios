@@ -1,4 +1,4 @@
-version: "3.9"
+﻿version: "3.9"
 
 # ─────────────────────────────────────────────
 # REDES
@@ -224,7 +224,10 @@ services:
       context: ./microservicios/notificaciones
       dockerfile: Dockerfile
     environment:
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASS: guest
       SMTP_HOST: mailhog
       SMTP_PORT: 1025
       SMTP_FROM: noreply@empresa.com
@@ -252,6 +255,7 @@ services:
       AUTH_URL: http://autenticacion:8081
       PERFILES_URL: http://gestion-perfiles:8083
       VACACIONES_URL: http://gestion-vacaciones:8084
+      NOTIFICACIONES_URL: http://notificaciones:8085
     ports:
       - "8080:8080"
     depends_on:
@@ -339,7 +343,10 @@ services:
       - prometheus-data:/prometheus
     ports:
       - "9091:9090"
-    networks: [observability-network]
+    networks:
+      - observability-network
+      - backend-network
+      - messaging-network
 
   grafana:
     image: grafana/grafana:10.4.0

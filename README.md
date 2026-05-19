@@ -1,55 +1,96 @@
-# Sistema de Gestión de Empleados — Arquitectura de Microservicios
+# Sistema de Gestión de Empleados - Arquitectura de Microservicios
 
-## Descripción General
-
-Sistema empresarial para automatizar el ciclo de vida del empleado: **onboarding, gestión de perfil, vacaciones y offboarding**. Basado en arquitectura de microservicios con comunicación asíncrona mediante message broker.
+Sistema empresarial que automatiza el ciclo de vida completo del empleado: **onboarding**, **gestión de perfil**, **vacaciones** y **offboarding**. Construido sobre arquitectura de microservicios con comunicación asíncrona mediante RabbitMQ, observabilidad completa con ELK + Prometheus + Grafana, y pipeline CI/CD con Jenkins.
 
 ---
 
-## Arquitectura de Alto Nivel
+## Tabla de Contenidos
+
+1. [Arquitectura](#arquitectura)
+2. [Stack tecnológico](#stack-tecnológico)
+3. [Requisitos previos](#requisitos-previos)
+4. [Levantar el sistema](#levantar-el-sistema)
+5. [URLs de acceso](#urls-de-acceso)
+6. [Credenciales por defecto](#credenciales-por-defecto)
+7. [Flujos de negocio](#flujos-de-negocio)
+8. [Endpoints del API Gateway](#endpoints-del-api-gateway)
+9. [Eventos del sistema](#eventos-del-sistema)
+10. [Observabilidad](#observabilidad)
+11. [Estructura del proyecto](#estructura-del-proyecto)
+12. [Comandos útiles](#comandos-útiles)
+13. [Solución de problemas](#solución-de-problemas)
+
+---
+
+## Arquitectura
 
 ```
-[Cliente] → [API Gateway :8080]
-               ↓ REST
-   ┌───────────┬────────────┬────────────┬────────────┬─────────────┐
-   │Auth :8081 │Empleados   │Perfiles    │Vacaciones  │Notificaciones│
-   │           │:8082       │:8083       │:8084       │:8085        │
-   └───────────┴────────────┴────────────┴────────────┴─────────────┘
-               ↓ Eventos asíncronos
-          [RabbitMQ :5672 / UI :15672]
-               ↓
-   ┌───────────────────────────────────────────────┐
-   │ ELK Stack + Prometheus + Grafana (Observabilidad)│
-   └───────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                        CLIENTE                               │
+│                  (curl / Browser / App)                      │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ HTTPS
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│               API GATEWAY - Node.js :8080                    │
+│     Routing · Validación JWT · Endpoint composite           │
+└──┬──────────┬────────────┬────────────┬────────────┬────────┘
+   │ REST     │ REST       │ REST       │ REST       │ REST
+   ▼          ▼            ▼            ▼            ▼
+:8081      :8082         :8083        :8084        :8085
+Auth       Empleados     Perfiles     Vacaciones   Notificaciones
+Java       Java          Python       Go           Python
+PostgreSQL PostgreSQL    MongoDB      PostgreSQL   (sin BD)
+   │          │            │            │            │
+   └──────────┴────────────┴────────────┴────────────┘
+                           │ Eventos asíncronos
+                           ▼
+              ┌─────────────────────────┐
+              │   RabbitMQ :5672        │
+              │   3 exchanges · 9 queues│
+              └─────────────────────────┘
+                           │
+              ┌────────────┴────────────┐
+              ▼                         ▼
+   ELK Stack (logs)         Prometheus + Grafana (métricas)
+   Filebeat→Logstash→ES→Kibana    Scraping /metrics
 ```
 
----
-
-## Stack Tecnológico — 4 Lenguajes Obligatorios
-
-| Microservicio        | Lenguaje         | Framework      | Base de Datos      | Puerto |
-|---------------------|------------------|----------------|--------------------|--------|
-| API Gateway          | **Node.js**      | Express        | —                  | 8080   |
-| Autenticación        | **Java**         | Spring Boot    | PostgreSQL         | 8081   |
-| Gestión de Empleados | **Java**         | Spring Boot    | PostgreSQL         | 8082   |
-| Gestión de Perfiles  | **Python**       | FastAPI        | MongoDB            | 8083   |
-| Gestión de Vacaciones| **Go**           | Gin            | PostgreSQL         | 8084   |
-| Notificaciones       | **Python**       | FastAPI        | —                  | 8085   |
-
-> ✅ Cumple la restricción de **al menos 4 lenguajes**: Java, Node.js, Python, Go
+**Principios de comunicación:**
+- **Sincrónica (REST):** solo entre Cliente ↔ API Gateway ↔ Microservicios
+- **Asíncrona (Eventos):** entre microservicios, exclusivamente via RabbitMQ
+- Los microservicios nunca se llaman entre sí por HTTP
 
 ---
 
-## Message Broker — Eventos del Sistema
+## Stack Tecnológico
 
-| Evento                  | Publicado por       | Consumido por                   |
-|------------------------|---------------------|---------------------------------|
-| `empleado.creado`       | gestion-empleados   | autenticacion, notificaciones   |
-| `empleado.actualizado`  | gestion-empleados   | gestion-perfiles                |
-| `empleado.eliminado`    | gestion-empleados   | autenticacion, gestion-perfiles |
-| `vacaciones.programadas`| gestion-vacaciones  | autenticacion, notificaciones   |
-| `cuenta.activada`       | autenticacion       | notificaciones                  |
-| `cuenta.desactivada`    | autenticacion       | notificaciones                  |
+| Microservicio | Lenguaje | Framework | Base de Datos | Puerto |
+|---|---|---|---|---|
+| API Gateway | Node.js 20 | Express 4 | — | 8080 |
+| Autenticación | Java 21 | Spring Boot 3.1 + Security | PostgreSQL 16 | 8081 |
+| Gestión de Empleados | Java 21 | Spring Boot 3.1 + JPA | PostgreSQL 16 | 8082 |
+| Gestión de Perfiles | Python 3.12 | FastAPI | MongoDB 7 | 8083 |
+| Gestión de Vacaciones | Go 1.22 | Gin | PostgreSQL 16 | 8084 |
+| Notificaciones | Python 3.12 | FastAPI | — | 8085 |
+
+> ✅ Cumple la restricción de **4 lenguajes distintos**: Java · Node.js · Python · Go
+
+**Infraestructura de soporte:**
+
+| Servicio | Imagen | Propósito |
+|---|---|---|
+| RabbitMQ | `rabbitmq:3.13-management-alpine` | Message broker |
+| PostgreSQL (×3) | `postgres:16-alpine` | BD para auth, empleados, vacaciones |
+| MongoDB | `mongo:7` | BD para perfiles |
+| MailHog | `mailhog/mailhog` | Servidor SMTP para desarrollo |
+| Elasticsearch | `elasticsearch:8.13.0` | Almacén de logs |
+| Logstash | `logstash:8.13.0` | Procesamiento de logs |
+| Filebeat | `elastic/filebeat:8.13.0` | Captura de logs de contenedores |
+| Kibana | `kibana:8.13.0` | Visualización de logs |
+| Prometheus | `prom/prometheus:v2.51.0` | Recolección de métricas |
+| Grafana | `grafana/grafana:10.4.0` | Dashboards de métricas |
+| Jenkins | `jenkins/jenkins:lts-jdk21` | Pipeline CI/CD |
 
 ---
 
@@ -57,129 +98,577 @@ Sistema empresarial para automatizar el ciclo de vida del empleado: **onboarding
 
 - Docker >= 24.x
 - Docker Compose >= 2.x
-- (Opcional) IntelliJ IDEA para desarrollo Java
+- Git
+- 8 GB RAM disponible recomendados (ELK consume ~2 GB)
 
 ---
 
-## Cómo Levantar el Sistema
+## Levantar el Sistema
 
 ```bash
-# Descomprimir y entrar al directorio
-cd proyecto-final-microservicios
+# 1. Clonar el repositorio
+git clone https://github.com/MiguelMontenegroG/py_microservicios
+cd py_microservicios
 
-# Levantar todo el sistema (primera vez tarda ~3-5 min)
+# 2. Levantar todo el sistema
 docker-compose up --build
 
-# Levantar en background
-docker-compose up --build -d
+# La primera vez tarda ~5 minutos:
+# - Descarga imágenes base (~3 GB)
+# - Compila los servicios Java con Maven
+# - Instala dependencias Python y Node.js
+# - Compila el binario Go
 
-# Detener todo
+# 3. Verificar que todos los servicios están saludables
+docker-compose ps
+# Todos deben mostrar "healthy" o "running"
+```
+
+**Levantar en segundo plano:**
+```bash
+docker-compose up --build -d
+docker-compose logs -f   # seguir logs en tiempo real
+```
+
+**Detener el sistema:**
+```bash
+# Detener preservando datos (bases de datos, volúmenes)
 docker-compose down
 
-# Limpiar volúmenes (reset total)
+# Detener y borrar TODOS los datos — reset completo
 docker-compose down -v
 ```
 
+**Reconstruir un servicio individual:**
+```bash
+docker-compose up -d --build gestion-empleados
+```
+
+---
+
 ## URLs de Acceso
 
-| Servicio         | URL                              | Credenciales por defecto |
-|-----------------|----------------------------------|--------------------------|
-| API Gateway      | http://localhost:8080            | —                        |
-| Swagger UI       | http://localhost:8080/api-docs   | —                        |
-| RabbitMQ UI      | http://localhost:15672           | guest / guest            |
-| Kibana (logs)    | http://localhost:5601            | —                        |
-| Grafana          | http://localhost:3000            | admin / admin            |
-| Jenkins          | http://localhost:9090            | admin / admin            |
-| Prometheus       | http://localhost:9091            | —                        |
+| Servicio | URL | Notas |
+|---|---|---|
+| **API Gateway** | http://localhost:8080 | Punto de entrada único |
+| **Swagger UI** | http://localhost:8080/api-docs | Documentación interactiva de todos los endpoints |
+| Swagger — Auth | http://localhost:8081/swagger-ui.html | |
+| Swagger — Empleados | http://localhost:8082/swagger-ui.html | |
+| Swagger — Perfiles | http://localhost:8083/docs | FastAPI auto-docs |
+| Swagger — Notificaciones | http://localhost:8085/docs | FastAPI auto-docs |
+| **RabbitMQ** | http://localhost:15672 | Gestión de exchanges y queues |
+| **MailHog** | http://localhost:8025 | Ver emails enviados por el sistema |
+| **Kibana** | http://localhost:5601 | Explorar logs centralizados |
+| **Grafana** | http://localhost:3000 | Dashboards de métricas |
+| **Prometheus** | http://localhost:9091 | Métricas crudas y targets |
+| **Jenkins** | http://localhost:9090 | Pipelines CI/CD |
+
+---
+
+## Credenciales por Defecto
+
+| Servicio | Usuario | Contraseña   |
+|---|---|--------------|
+| Admin del sistema | `admin@empresa.com` | `Admin123!`  |
+| RabbitMQ | `guest` | `guest`      |
+| Grafana | `admin` | `admin123`   |
+| Jenkins | `admin` | `admin`      |
+| MailHog | — | — (sin auth) |
+| Kibana | — | — (sin auth) |
+
+> ⚠️ El usuario admin del sistema se crea llamando a `POST /auth/seed` la primera vez (ver flujo de onboarding).
+
+---
+
+## Flujos de Negocio
+
+### Onboarding — Alta de empleado
+
+Cuando RRHH registra un nuevo empleado, el sistema orquesta automáticamente la creación de credenciales y el envío del email de bienvenida sin intervención manual.
+
+```
+RRHH → POST /employees
+         │
+         ▼
+  gestion-empleados
+  guarda empleado (ACTIVO)
+  publica: empleado.creado
+         │
+         ├──► autenticacion
+         │    genera password aleatoria (10 chars)
+         │    guarda hash BCrypt
+         │    publica: cuenta.activada {email, passwordTemporal}
+         │              │
+         │              └──► notificaciones
+         │                   envía email de bienvenida
+         │                   con credenciales a MailHog
+         │
+         └──► gestion-perfiles
+              crea perfil vacío
+              listo para que el empleado lo complete
+```
+
+**Comandos:**
+```bash
+# Paso 1 — Crear usuario admin (solo la primera vez)
+curl -X POST http://localhost:8081/auth/seed
+
+# Paso 2 — Login como admin
+curl -X POST http://localhost:8080/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin@empresa.com","password":"Admin123!"}'
+# Guardar el "token" de la respuesta
+
+# Paso 3 — Crear empleado
+curl -X POST http://localhost:8080/employees \
+  -H "Authorization: Bearer {TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nombre": "Ana",
+    "apellido": "García",
+    "email": "ana@empresa.com",
+    "numeroEmpleado": "EMP-010",
+    "fechaIngreso": "2024-01-15",
+    "cargo": "Desarrolladora",
+    "area": "TI"
+  }'
+
+# Paso 4 — Ver el email de bienvenida con la contraseña temporal
+# Abrir http://localhost:8025
+```
+
+**En PowerShell:**
+```powershell
+$token = (Invoke-RestMethod -Uri "http://localhost:8081/auth/login" `
+  -Method POST -ContentType "application/json" `
+  -Body '{"username":"admin@empresa.com","password":"Admin123!"}').token
+
+$empleado = Invoke-RestMethod -Uri "http://localhost:8082/employees" `
+  -Method POST -Headers @{"Authorization"="Bearer $token"} `
+  -ContentType "application/json" `
+  -Body '{"nombre":"Ana","apellido":"Garcia","email":"ana@empresa.com","numeroEmpleado":"EMP-010","fechaIngreso":"2024-01-15","cargo":"Desarrolladora","area":"TI"}'
+
+Write-Output "Empleado creado: $($empleado.id)"
+```
+
+---
+
+### Login del empleado
+
+```bash
+# Con la contraseña temporal del email de bienvenida
+curl -X POST http://localhost:8080/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"ana@empresa.com","password":"{PASSWORD_TEMPORAL}"}'
+```
+
+---
+
+### Gestión de Perfil
+
+```bash
+# Ver mi perfil
+curl http://localhost:8080/profile \
+  -H "Authorization: Bearer {TOKEN_EMPLEADO}"
+
+# Actualizar mi perfil
+curl -X PUT http://localhost:8080/profile \
+  -H "Authorization: Bearer {TOKEN_EMPLEADO}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "telefono": "3001234567",
+    "biografia": "Desarrolladora full-stack",
+    "direccion": {
+      "calle": "Calle 123",
+      "ciudad": "Bogotá",
+      "codigoPostal": "110111",
+      "pais": "Colombia"
+    }
+  }'
+```
+
+---
+
+### Vacaciones
+
+Al programar vacaciones, la cuenta del empleado se desactiva automáticamente.
+
+```bash
+curl -X POST http://localhost:8080/vacations \
+  -H "Authorization: Bearer {TOKEN_ADMIN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "empleadoId": "{EMPLEADO_ID}",
+    "email": "ana@empresa.com",
+    "nombre": "Ana García",
+    "fechaInicio": "2025-08-01",
+    "fechaFin": "2025-08-15"
+  }'
+# El empleado recibe email de confirmación en MailHog
+```
+
+**Validaciones aplicadas:**
+- `fechaFin` debe ser posterior a `fechaInicio`
+- No se permiten períodos solapados para el mismo empleado (retorna 409)
+- Formato de fechas: `YYYY-MM-DD`
+
+---
+
+### Cambio de Contraseña
+
+```bash
+curl -X POST http://localhost:8080/auth/change-password \
+  -H "Authorization: Bearer {TOKEN_EMPLEADO}" \
+  -H "Content-Type: application/json" \
+  -d '{"currentPassword":"{PASSWORD_ACTUAL}","newPassword":"NuevaPassword123!"}'
+```
+
+---
+
+### Offboarding — Baja de empleado
+
+```bash
+curl -X DELETE http://localhost:8080/employees/{EMPLEADO_ID} \
+  -H "Authorization: Bearer {TOKEN_ADMIN}"
+# El sistema desactiva credenciales, archiva perfil y envía email de notificación
+```
+
+**Lo que ocurre automáticamente:**
+- La cuenta de autenticación queda desactivada permanentemente
+- El perfil queda archivado (no se elimina — auditoría)
+- El empleado recibe un email de notificación
+- Se registra en el audit log con fecha y hora
 
 ---
 
 ## Endpoints del API Gateway
 
-### Autenticación
-```
-POST /auth/login              → Login, retorna JWT
-POST /auth/change-password    → Cambiar contraseña (requiere JWT)
-```
+| Método | Path | Auth | Descripción |
+|---|---|---|---|
+| `POST` | `/auth/login` | ❌ | Login — retorna JWT |
+| `POST` | `/auth/change-password` | ✅ | Cambiar contraseña |
+| `GET` | `/employees` | ✅ | Listar empleados |
+| `POST` | `/employees` | ✅ | Crear empleado (dispara onboarding) |
+| `GET` | `/employees/{id}` | ✅ | Empleado completo (datos + perfil) |
+| `PUT` | `/employees/{id}` | ✅ | Actualizar empleado |
+| `DELETE` | `/employees/{id}` | ✅ | Eliminar empleado (offboarding) |
+| `GET` | `/profile` | ✅ | Ver mi perfil |
+| `PUT` | `/profile` | ✅ | Actualizar mi perfil |
+| `POST` | `/vacations` | ✅ | Programar vacaciones |
+| `GET` | `/vacations` | ✅ | Listar vacaciones |
+| `GET` | `/health` | ❌ | Estado del sistema y dependencias |
+| `GET` | `/metrics` | ❌ | Métricas Prometheus |
+| `GET` | `/api-docs` | ❌ | Swagger UI |
 
-### Empleados (requiere JWT de RRHH/admin)
-```
-GET    /employees             → Listar todos
-POST   /employees             → Crear empleado (dispara onboarding automático)
-GET    /employees/{id}        → Empleado completo (datos + perfil)
-PUT    /employees/{id}        → Actualizar empleado
-DELETE /employees/{id}        → Eliminar empleado (offboarding)
-```
+> ⚠️ No existe endpoint `/auth/register`. Las cuentas se crean **únicamente** de forma automática al registrar un empleado.
 
-### Perfil (requiere JWT del empleado autenticado)
+**Autenticación:** todas las rutas marcadas con ✅ requieren header:
 ```
-GET  /profile                 → Ver mi perfil
-PUT  /profile                 → Actualizar mi perfil
-```
-
-### Vacaciones (requiere JWT de RRHH/admin)
-```
-POST /vacations               → Programar vacaciones
-GET  /vacations               → Consultar vacaciones
+Authorization: Bearer {JWT_TOKEN}
 ```
 
 ---
 
-## Flujos de Negocio Críticos
+## Eventos del Sistema
 
-### 1. Onboarding
+### Exchanges y Routing Keys
+
+| Exchange | Routing Key | Publicado por | Consumido por |
+|---|---|---|---|
+| `empleados.exchange` | `empleado.creado` | gestion-empleados | autenticacion, gestion-perfiles, notificaciones |
+| `empleados.exchange` | `empleado.actualizado` | gestion-empleados | gestion-perfiles |
+| `empleados.exchange` | `empleado.eliminado` | gestion-empleados | autenticacion, gestion-perfiles |
+| `vacaciones.exchange` | `vacaciones.programadas` | gestion-vacaciones | autenticacion, notificaciones |
+| `cuentas.exchange` | `cuenta.activada` | autenticacion | notificaciones |
+| `cuentas.exchange` | `cuenta.desactivada` | autenticacion | notificaciones |
+
+### Queues activas (9)
+
 ```
-RRHH: POST /employees
-  → gestion-empleados guarda empleado con estado ACTIVO
-  → publica evento: empleado.creado
-  → autenticacion consume → crea usuario/contraseña → publica cuenta.activada
-  → notificaciones consume empleado.creado → envía email con credenciales
+auth.empleado.creado          perfiles.empleado.creado       notif.cuenta.activada
+auth.empleado.eliminado       perfiles.empleado.actualizado  notif.cuenta.desactivada
+auth.vacaciones.programadas   perfiles.empleado.eliminado    notif.vacaciones.programadas
 ```
 
-### 2. Vacaciones
+### Estados del empleado
+
 ```
-RRHH: POST /vacations
-  → gestion-vacaciones guarda período
-  → publica evento: vacaciones.programadas
-  → autenticacion consume → desactiva cuenta en fecha inicio, reactiva en fecha fin
-  → notificaciones consume → envía email de confirmación
+ACTIVO ──── (programar vacaciones) ──► EN_VACACIONES ──── (fin vacaciones) ──► ACTIVO
+  │
+  └──── (eliminar / retirar) ──────────────────────────────────────────────► RETIRADO
 ```
 
-### 3. Offboarding
+---
+
+## Observabilidad
+
+### Logs Centralizados (ELK)
+
+Todos los microservicios emiten logs en formato JSON a stdout. El flujo es:
+
 ```
-RRHH: DELETE /employees/{id}  o  PUT /employees/{id} con estado=RETIRADO
-  → gestion-empleados publica evento: empleado.eliminado
-  → autenticacion consume → desactiva permanentemente → publica cuenta.desactivada
-  → gestion-perfiles consume → archiva perfil
-  → notificaciones consume cuenta.desactivada → envía notificación de salida
+Microservicio → stdout → Docker → Filebeat → Logstash → Elasticsearch → Kibana
 ```
+
+**Configurar Kibana (primera vez):**
+1. Abrir http://localhost:5601
+2. Ir a **Stack Management → Index Patterns → Create index pattern**
+3. Pattern: `microservicios-*` — Time field: `@timestamp`
+4. Ir a **Discover** para explorar logs
+
+**Campos disponibles en los logs:**
+- `service` — nombre del microservicio
+- `level` — INFO · WARN · ERROR
+- `message` — descripción del evento
+- `timestamp` — fecha y hora ISO-8601
+
+**Búsquedas útiles en Kibana (KQL):**
+```
+level: "ERROR"                          # Solo errores
+service: "gestion-empleados"            # Logs de un servicio específico
+level: "ERROR" and service: "autenticacion"
+```
+
+### Monitoreo (Prometheus + Grafana)
+
+Todos los servicios exponen métricas en `/metrics` o `/actuator/prometheus`.
+
+**Verificar targets en Prometheus:**
+- Abrir http://localhost:9091/targets
+- Los 7 targets deben estar en estado **UP**: api-gateway, autenticacion, gestion-empleados, gestion-perfiles, gestion-vacaciones, notificaciones, rabbitmq
+
+**Dashboards en Grafana (http://localhost:3000):**
+- **Microservicios Overview** — estado general, latencia P95, requests/s, errores, métricas JVM, métricas de negocio
+- **Logs Dashboard** — visualización de logs desde Elasticsearch
+
+**Alertas configuradas:**
+
+| Alerta | Condición | Severidad |
+|---|---|---|
+| `ServicioDown` | Un servicio no responde por > 1 min | Critical |
+| `AltaTasaErrores` | Errores 5xx > 5% por > 2 min | Warning |
+| `AltaLatencia` | P95 > 2 segundos por > 5 min | Warning |
+| `AltaMemoriaJVM` | Heap JVM > 85% por > 5 min | Warning |
 
 ---
 
 ## Estructura del Proyecto
 
-Ver archivo `docs/arquitectura.md` para diagramas detallados.
-
 ```
-proyecto-final-microservicios/
+py_microservicios/
+│
+├── docker-compose.yml              # Orquestación completa — un solo comando levanta todo
 ├── README.md
-├── docker-compose.yml
+│
 ├── microservicios/
-│   ├── api-gateway/          (Node.js)
-│   ├── autenticacion/        (Java/Spring Boot)
-│   ├── gestion-empleados/    (Java/Spring Boot)
-│   ├── gestion-perfiles/     (Python/FastAPI)
-│   ├── gestion-vacaciones/   (Go/Gin)
-│   └── notificaciones/       (Python/FastAPI)
+│   ├── api-gateway/                # Node.js 20 / Express — puerto 8080
+│   │   ├── Dockerfile              # Multi-stage, node:20-alpine
+│   │   ├── Jenkinsfile
+│   │   ├── src/
+│   │   │   ├── app.js              # Configuración Express (sin listener)
+│   │   │   ├── index.js            # Listener del servidor
+│   │   │   ├── middleware/         # auth.middleware.js, logger.middleware.js
+│   │   │   ├── routes/             # auth, employees, profile, vacations
+│   │   │   └── proxy/httpProxy.js  # Forwarding HTTP con axios
+│   │   └── tests/                  # 37 tests, 89.68% cobertura
+│   │
+│   ├── autenticacion/              # Java 21 / Spring Boot — puerto 8081
+│   │   ├── Dockerfile              # Multi-stage, bellsoft/liberica-openjre-alpine:21
+│   │   ├── Jenkinsfile
+│   │   ├── src/main/java/
+│   │   │   ├── controller/         # AuthController (login, validate, change-password)
+│   │   │   ├── service/            # AuthService, JwtService, EmpleadoEventConsumer
+│   │   │   ├── model/              # Usuario, AuditLog
+│   │   │   └── config/             # SecurityConfig, RabbitMQConfig
+│   │   └── src/test/               # 22 tests (13 unitarios + 9 integración)
+│   │
+│   ├── gestion-empleados/          # Java 21 / Spring Boot — puerto 8082
+│   │   ├── Dockerfile              # Multi-stage, bellsoft/liberica-openjre-alpine:21
+│   │   ├── Jenkinsfile
+│   │   ├── src/main/java/
+│   │   │   ├── controller/         # EmpleadoController
+│   │   │   ├── service/            # EmpleadoService, EmpleadoEventPublisher
+│   │   │   ├── model/              # Empleado (ACTIVO/EN_VACACIONES/RETIRADO)
+│   │   │   └── config/             # RabbitMQConfig
+│   │   └── src/test/               # 34 tests (17 unitarios + 17 integración)
+│   │
+│   ├── gestion-perfiles/           # Python 3.12 / FastAPI — puerto 8083
+│   │   ├── Dockerfile              # Multi-stage, python:3.12-alpine
+│   │   ├── Jenkinsfile
+│   │   ├── src/
+│   │   │   ├── routers/            # perfil_router.py
+│   │   │   ├── services/           # perfil_service.py, rabbit_consumer.py
+│   │   │   ├── models/             # perfil.py (documento MongoDB)
+│   │   │   └── schemas/            # perfil_schema.py (Pydantic)
+│   │   └── tests/                  # 18 tests (9 servicio + 9 router)
+│   │
+│   ├── gestion-vacaciones/         # Go 1.22 / Gin — puerto 8084
+│   │   ├── Dockerfile              # Multi-stage, golang:1.22-alpine → alpine:3.19
+│   │   ├── Jenkinsfile
+│   │   ├── cmd/main.go             # Entry point con graceful shutdown
+│   │   ├── internal/
+│   │   │   ├── handlers/           # vacaciones_handler.go
+│   │   │   ├── service/            # vacaciones_service.go (AppError)
+│   │   │   ├── repository/         # vacaciones_repo.go (interfaz)
+│   │   │   └── messaging/          # rabbit_publisher.go
+│   │   └── tests/                  # 27 tests (14 servicio + 13 handler)
+│   │
+│   └── notificaciones/             # Python 3.12 / FastAPI — puerto 8085
+│       ├── Dockerfile              # Multi-stage, python:3.12-alpine
+│       ├── Jenkinsfile
+│       ├── src/
+│       │   ├── email_service.py    # aiosmtplib + Jinja2
+│       │   ├── consumers/          # cuenta_consumer.py, vacaciones_consumer.py
+│       │   └── templates/          # bienvenida.html, vacaciones.html, desactivacion.html
+│       └── tests/                  # 42 tests, 72.86% cobertura
+│
 ├── observabilidad/
-│   ├── logs/                 (ELK Stack config)
-│   ├── monitoreo/            (Prometheus config)
-│   └── dashboards/           (Grafana dashboards)
+│   ├── logs/
+│   │   ├── filebeat.yml            # Captura logs de contenedores Docker
+│   │   ├── logstash.conf           # Pipeline: Filebeat → Elasticsearch
+│   │   └── logstash-pipeline.yml
+│   ├── monitoreo/
+│   │   ├── prometheus.yml          # Scrape de los 7 targets
+│   │   ├── alertas.yml             # 4 reglas de alerta
+│   │   └── grafana-datasources.yml # Prometheus + Elasticsearch
+│   └── dashboards/
+│       ├── dashboards-provisioning.yml
+│       ├── overview.json           # Dashboard principal (14 paneles)
+│       └── logs-dashboard.json     # Dashboard de logs
+│
 ├── docs/
-│   ├── arquitectura.md
-│   ├── eventos.md
+│   ├── arquitectura.md             # Modelos de datos, payloads de eventos, estándares HTTP
+│   ├── eventos.md                  # Exchanges, queues, payloads completos
 │   └── guias/
+│       ├── AGENTE_IA_INSTRUCCIONES.md   # Guía para agente de IA (lecciones aprendidas)
+│       ├── GUIA_PRUEBAS.md              # Pruebas funcionales del sistema completo
+│       └── ORDEN_READMES.md
+│
 └── scripts/
-    ├── init-db.sql
-    └── seed-data.sql
+    ├── init-db.sql                 # Esquema inicial de las 3 bases de datos PostgreSQL
+    └── seed-data.sql               # Datos de prueba
+```
+
+---
+
+## Comandos Útiles
+
+**Gestión del sistema:**
+```bash
+# Ver estado de todos los contenedores
+docker-compose ps
+
+# Ver logs en tiempo real (todos los servicios)
+docker-compose logs -f
+
+# Ver logs de un servicio específico
+docker-compose logs -f notificaciones
+
+# Reiniciar un servicio sin detener los demás
+docker-compose restart gestion-empleados
+
+# Reconstruir y reiniciar un servicio
+docker-compose up -d --build autenticacion
+```
+
+**Verificación rápida:**
+```bash
+# Health check de todos los servicios
+for port in 8080 8081 8082 8083 8084 8085; do
+  echo -n "Puerto $port: "
+  curl -s http://localhost:$port/health | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status','?'))"
+done
+
+# Ver queues de RabbitMQ y cantidad de mensajes
+curl -s -u guest:guest http://localhost:15672/api/queues | \
+  python3 -c "import sys,json; [print(f\"{q['name']}: {q['messages']} mensajes\") for q in json.load(sys.stdin)]"
+
+# Ver emails en MailHog
+curl -s http://localhost:8025/api/v2/messages | \
+  python3 -c "import sys,json; d=json.load(sys.stdin); [print(m['Content']['Headers']['Subject']) for m in d.get('items',[])]"
+```
+
+**Base de datos:**
+```bash
+# Conectar a PostgreSQL de empleados
+docker exec -it $(docker-compose ps -q db-empleados) psql -U empleados_user -d empleados_db
+
+# Conectar a MongoDB de perfiles
+docker exec -it $(docker-compose ps -q mongo-perfiles) mongosh -u perfiles_user -p perfiles_pass perfiles_db
+```
+
+**RabbitMQ:**
+```bash
+# Listar queues con sus consumidores
+docker exec $(docker-compose ps -q rabbitmq) rabbitmqctl list_queues name consumers messages
+
+# Purgar una queue (útil para limpiar mensajes de prueba)
+docker exec $(docker-compose ps -q rabbitmq) rabbitmqctl purge_queue notif.cuenta.activada
+```
+
+---
+
+## Solución de Problemas
+
+### El sistema tarda mucho en arrancar
+Normal en la primera ejecución. Maven descarga ~500 MB de dependencias Java. Con conexión estándar tarda ~5 minutos. Las siguientes veces usa caché y tarda ~1 minuto.
+
+### Un servicio aparece como `unhealthy`
+```bash
+# Ver qué está fallando
+docker-compose logs nombre-servicio | tail -50
+
+# Reiniciar el servicio problemático
+docker-compose restart nombre-servicio
+```
+
+### Los emails no llegan a MailHog
+1. Verificar que el servicio `notificaciones` está saludable: `curl http://localhost:8085/health`
+2. Verificar que los consumers están activos en RabbitMQ: http://localhost:15672 → Queues → columna "Consumers" debe ser ≥ 1 en las queues `notif.*`
+3. Si hay mensajes acumulados en las queues con 0 consumidores, reiniciar notificaciones: `docker-compose restart notificaciones`
+
+### Prometheus muestra targets DOWN
+Verificar que Prometheus tiene acceso a las redes correctas. Los servicios deben estar en `backend-network` y `observability-network`. Revisar el `docker-compose.yml`.
+
+### Error al validar JWT en el Gateway
+El `JWT_SECRET` debe ser idéntico en el servicio de autenticación y en el API Gateway. Verificar las variables de entorno en `docker-compose.yml`.
+
+### En Windows — `curl` no funciona correctamente
+PowerShell tiene un alias `curl` que apunta a `Invoke-WebRequest`. Usar siempre `curl.exe` para el curl real, o preferir `Invoke-RestMethod` para requests con body JSON:
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8080/auth/login" `
+  -Method POST -ContentType "application/json" `
+  -Body '{"username":"admin@empresa.com","password":"Admin123!"}'
+```
+
+---
+
+## Tests por Microservicio
+
+| Servicio | Tests unitarios | Tests integración | Total | Cobertura |
+|---|---|---|---|---|
+| gestion-empleados | 17 | 17 | 34 | ≥ 70% |
+| autenticacion | 13 | 9 | 22 | ≥ 70% |
+| gestion-perfiles | 9 | 9 | 18 | ≥ 70% |
+| gestion-vacaciones | 14 | 13 | 27 | ≥ 70% |
+| notificaciones | 36 | 6 | 42 | 72.86% |
+| api-gateway | 34 | 3 | 37 | 89.68% |
+| **Total** | **123** | **57** | **180** | **≥ 70% todos** |
+
+**Ejecutar tests de un servicio:**
+```bash
+# Java
+docker-compose run --rm gestion-empleados mvn test
+
+# Python
+docker run --rm -v "${PWD}/microservicios/notificaciones:/app" -w /app \
+  python:3.12-alpine sh -c "pip install -r requirements.txt -q && pytest --cov=src -q"
+
+# Go
+docker run --rm -v "${PWD}/microservicios/gestion-vacaciones:/app" -w /app \
+  golang:1.22-alpine go test ./... -cover
+
+# Node.js
+docker run --rm -v "${PWD}/microservicios/api-gateway:/app" -w /app \
+  node:20-alpine sh -c "npm ci --quiet && npm test -- --coverage"
 ```

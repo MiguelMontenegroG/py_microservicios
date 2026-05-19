@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-from typing import Optional
 
 import aio_pika
 
@@ -10,138 +9,153 @@ from src.email_service import send_email
 
 logger = logging.getLogger(__name__)
 
-_running = False
+_cuenta_activada_running = False
+_cuenta_desactivada_running = False
 
 
 def is_consumer_running() -> bool:
-    return _running
+    return _cuenta_activada_running or _cuenta_desactivada_running
 
 
-async def _procesar_cuenta_activada(body: dict) -> None:
-    """Procesa evento cuenta.activada: envia email de bienvenida con credenciales."""
-    payload = body.get("payload", body)
-    email = payload.get("email")
-    nombre = payload.get("nombre", "Usuario")
-    username = payload.get("email", "---")
-    password_temporal = payload.get("passwordTemporal", "")
-    es_primer_acceso = payload.get("esPrimerAcceso", False)
-
-    if not email:
-        logger.warning("Evento cuenta.activada sin email, ignorando")
-        return
-
-    if not es_primer_acceso:
-        logger.info("Evento cuenta.activada con esPrimerAcceso=false para %s, omitiendo email", email)
-        return
-
-    context = {
-        "nombre": nombre,
-        "username": username,
-        "passwordTemporal": password_temporal,
-        "url_acceso": "http://localhost:8080",
-    }
-
-    await send_email(
-        to=email,
-        subject="Bienvenido a la Empresa - Credenciales de Acceso",
-        template="bienvenida.html",
-        context=context,
-    )
-
-
-async def _procesar_cuenta_desactivada(body: dict) -> None:
-    """Procesa evento cuenta.desactivada: envia email de notificacion."""
-    payload = body.get("payload", body)
-    email = payload.get("email")
-    nombre = payload.get("nombre", "Usuario")
-    motivo = payload.get("motivo", "No especificado")
-    timestamp = payload.get("timestamp", "")
-
-    if not email:
-        logger.warning("Evento cuenta.desactivada sin email, ignorando")
-        return
-
-    context = {
-        "nombre": nombre,
-        "motivo": motivo,
-        "timestamp": timestamp,
-    }
-
-    await send_email(
-        to=email,
-        subject="Notificacion: Cuenta Desactivada",
-        template="desactivacion.html",
-        context=context,
-    )
-
-
-_handlers = {
-    "cuenta.activada": _procesar_cuenta_activada,
-    "cuenta.desactivada": _procesar_cuenta_desactivada,
-}
-
-
-async def _on_message(message: aio_pika.IncomingMessage) -> None:
-    async with message.process(ignore_processed=True):
-        try:
-            body = json.loads(message.body.decode())
-            event_type = body.get("eventType", "")
-            logger.info("Evento recibido: %s", event_type)
-
-            handler = _handlers.get(event_type)
-            if handler:
-                await handler(body)
-            else:
-                logger.warning("Tipo de evento desconocido: %s", event_type)
-        except json.JSONDecodeError as e:
-            logger.error("Error decodificando JSON: %s", str(e))
-        except Exception as e:
-            logger.error("Error procesando mensaje: %s", str(e))
-
-
-async def start_cuenta_consumer() -> None:
-    """Inicia el consumidor de eventos de cuenta (activada/desactivada)."""
-    global _running
-
-    connection: Optional[aio_pika.Connection] = None
+async def _connect_with_retry(service_name: str):
+    """Conectar a RabbitMQ con reintentos. Retorna la conexion o None."""
     for attempt in range(10):
         try:
             connection = await aio_pika.connect_robust(settings.RABBITMQ_URL)
-            logger.info("Conectado a RabbitMQ (intento %d/10)", attempt + 1)
-            break
+            logger.info("[%s] Conectado a RabbitMQ (intento %d/10)", service_name, attempt + 1)
+            return connection
         except Exception as e:
             logger.warning(
-                "Intento %d/10: no se pudo conectar a RabbitMQ: %s",
-                attempt + 1, str(e),
+                "[%s] Intento %d/10 fallido: %s", service_name, attempt + 1, str(e)
             )
             await asyncio.sleep(3)
-    else:
-        logger.error("No se pudo conectar a RabbitMQ tras 10 intentos")
-        return
+    logger.error("[%s] No se pudo conectar a RabbitMQ tras 10 intentos", service_name)
+    return None
 
+
+async def start_cuenta_activada_consumer():
+    """Consumer independiente para notif.cuenta.activada."""
+    global _cuenta_activada_running
+    connection = await _connect_with_retry("cuenta-activada")
+    if not connection:
+        return
     try:
         channel = await connection.channel()
-        await channel.set_qos(prefetch_count=10)
+        await channel.set_qos(prefetch_count=1)
 
         exchange = await channel.get_exchange("cuentas.exchange")
+        queue = await channel.declare_queue("notif.cuenta.activada", durable=True)
+        await queue.bind(exchange, routing_key="cuenta.activada")
 
-        # Declarar colas y bindings
-        queue_activada = await channel.declare_queue("notif.cuenta.activada", durable=True)
-        await queue_activada.bind(exchange, routing_key="cuenta.activada")
+        _cuenta_activada_running = True
+        logger.info("[cuenta-activada] Consumer iniciado, esperando mensajes...")
 
-        queue_desactivada = await channel.declare_queue("notif.cuenta.desactivada", durable=True)
-        await queue_desactivada.bind(exchange, routing_key="cuenta.desactivada")
+        async with queue.iterator() as queue_iter:
+            async for message in queue_iter:
+                async with message.process(ignore_processed=True):
+                    try:
+                        body = json.loads(message.body.decode())
+                        payload = body.get("payload", body)
+                        email = payload.get("email")
+                        nombre = payload.get("nombre", "Usuario")
+                        username = payload.get("email", "---")
+                        password_temporal = payload.get("passwordTemporal", "")
+                        es_primer_acceso = payload.get("esPrimerAcceso", False)
 
-        _running = True
-        logger.info("Consumer de cuentas iniciado - esperando mensajes...")
+                        if not email:
+                            logger.warning("[cuenta-activada] Evento sin email, ignorando")
+                            continue
 
-        await asyncio.gather(
-            queue_activada.consume(_on_message),
-            queue_desactivada.consume(_on_message),
-        )
+                        if not es_primer_acceso:
+                            logger.info(
+                                "[cuenta-activada] esPrimerAcceso=false para %s, omitiendo email", email
+                            )
+                            continue
+
+                        await send_email(
+                            to=email,
+                            subject="Bienvenido a la Empresa - Credenciales de Acceso",
+                            template="bienvenida.html",
+                            context={
+                                "nombre": nombre,
+                                "username": username,
+                                "passwordTemporal": password_temporal,
+                                "url_acceso": "http://localhost:8080",
+                            },
+                        )
+                        logger.info("[cuenta-activada] Email de bienvenida enviado a %s", email)
+                    except json.JSONDecodeError as e:
+                        logger.error("[cuenta-activada] Error decodificando JSON: %s", str(e))
+                    except Exception as e:
+                        logger.error("[cuenta-activada] Error procesando mensaje: %s", str(e))
     except Exception as e:
-        logger.error("Error en consumer de cuentas: %s", str(e))
+        logger.error("[cuenta-activada] Consumer caido: %s", str(e))
     finally:
+        _cuenta_activada_running = False
         if connection and not connection.is_closed:
             await connection.close()
-        _running = False
+
+
+async def start_cuenta_desactivada_consumer():
+    """Consumer independiente para notif.cuenta.desactivada."""
+    global _cuenta_desactivada_running
+    connection = await _connect_with_retry("cuenta-desactivada")
+    if not connection:
+        return
+    try:
+        channel = await connection.channel()
+        await channel.set_qos(prefetch_count=1)
+
+        exchange = await channel.get_exchange("cuentas.exchange")
+        queue = await channel.declare_queue("notif.cuenta.desactivada", durable=True)
+        await queue.bind(exchange, routing_key="cuenta.desactivada")
+
+        _cuenta_desactivada_running = True
+        logger.info("[cuenta-desactivada] Consumer iniciado, esperando mensajes...")
+
+        async with queue.iterator() as queue_iter:
+            async for message in queue_iter:
+                async with message.process(ignore_processed=True):
+                    try:
+                        body = json.loads(message.body.decode())
+                        payload = body.get("payload", body)
+                        email = payload.get("email")
+                        nombre = payload.get("nombre", "Usuario")
+                        motivo = payload.get("motivo", "No especificado")
+                        timestamp = payload.get("timestamp", "")
+
+                        if not email:
+                            logger.warning("[cuenta-desactivada] Evento sin email, ignorando")
+                            continue
+
+                        await send_email(
+                            to=email,
+                            subject="Notificacion: Cuenta Desactivada",
+                            template="desactivacion.html",
+                            context={
+                                "nombre": nombre,
+                                "motivo": motivo,
+                                "timestamp": timestamp,
+                            },
+                        )
+                        logger.info("[cuenta-desactivada] Email de desactivacion enviado a %s", email)
+                    except json.JSONDecodeError as e:
+                        logger.error("[cuenta-desactivada] Error decodificando JSON: %s", str(e))
+                    except Exception as e:
+                        logger.error("[cuenta-desactivada] Error procesando mensaje: %s", str(e))
+    except Exception as e:
+        logger.error("[cuenta-desactivada] Consumer caido: %s", str(e))
+    finally:
+        _cuenta_desactivada_running = False
+        if connection and not connection.is_closed:
+            await connection.close()
+
+
+async def start_all_cuenta_consumers():
+    """Lanza ambos consumers en paralelo con asyncio.gather.
+    return_exceptions=True evita que uno cancele al otro."""
+    await asyncio.gather(
+        start_cuenta_activada_consumer(),
+        start_cuenta_desactivada_consumer(),
+        return_exceptions=True,
+    )

@@ -15,8 +15,6 @@ pipeline {
         TESTCONTAINERS_RYUK_DISABLED = 'true'
         // Deshabilitar reuse de contenedores para entornos CI
         TESTCONTAINERS_REUSE_ENABLE = 'false'
-        // Variable para almacenar la IP del host Docker (se calcula en el stage)
-        DOCKER_HOST_IP = ''
     }
     stages {
         stage('Checkout') {
@@ -45,57 +43,43 @@ pipeline {
             steps {
                 dir('microservicios/gestion-empleados') {
                     // En Docker-in-Docker, los contenedores que Testcontainers crea
-                    // (PostgreSQL, RabbitMQ) se ejecutan en el host Docker, pero el
-                    // contenedor Jenkins no puede acceder a ellos via 172.17.0.1
-                    // porque esta en una red personalizada (cicd-network).
+                    // (PostgreSQL, RabbitMQ) se ejecutan en el host Docker, no dentro
+                    // del contenedor Jenkins. Como Jenkins esta en una red personalizada
+                    // (cicd-network), no puede alcanzar los contenedores de Testcontainers
+                    // que estan en el bridge por defecto (docker0) del host.
                     //
-                    // TESTCONTAINERS_HOST_OVERRIDE le dice a Testcontainers que informe
-                    // a la aplicacion que use esta IP para conectarse a los contenedores.
-                    // La IP se obtiene del gateway de red del contenedor Jenkins, que
-                    // es la IP del host Docker accesible desde la red de Jenkins.
+                    // Solucion: ejecutar los Integration Tests dentro de un contenedor
+                    // Docker temporal con --network host, que tiene acceso completo a
+                    // la red del host y puede ver los contenedores de Testcontainers.
+                    //
+                    // El contenedor usa la misma imagen Maven y monta:
+                    //   - El codigo fuente (/workspace)
+                    //   - El cache de Maven (~/.m2) para reutilizar dependencias
+                    //   - El socket de Docker para que Testcontainers pueda crear contenedores
                     script {
-                        DOCKER_HOST_IP = sh(
-                            script: """
-                                # Intentar obtener la IP del gateway (host Docker)
-                                # desde la perspectiva del contenedor Jenkins
-                                GW_IP=""
-
-                                # Metodo 1: ip route (iproute2, disponible en Debian)
-                                if command -v ip &> /dev/null; then
-                                    GW_IP=\$(ip route | grep default | awk '{print \$3}' 2>/dev/null)
-                                fi
-
-                                # Metodo 2: /proc/net/route (disponible en cualquier Linux)
-                                if [ -z "\$GW_IP" ]; then
-                                    GW_IP_HEX=\$(awk '\$2 == "00000000" {print \$3}' /proc/net/route 2>/dev/null | head -1)
-                                    if [ -n "\$GW_IP_HEX" ]; then
-                                        # Convertir hex LE a IP decimal
-                                        GW_IP=\$(echo "\$GW_IP_HEX" | awk '{
-                                            split(\$0, hex, "");
-                                            printf "%d.%d.%d.%d", strtonum("0x" hex[7] hex[8]), strtonum("0x" hex[5] hex[6]), strtonum("0x" hex[3] hex[4]), strtonum("0x" hex[1] hex[2])
-                                        }' 2>/dev/null)
-                                    fi
-                                fi
-
-                                # Metodo 3: host.docker.internal (Docker Desktop)
-                                if [ -z "\$GW_IP" ]; then
-                                    GW_IP=\$(getent hosts host.docker.internal | awk '{print \$1}' 2>/dev/null)
-                                fi
-
-                                # Fallback final
-                                echo "\${GW_IP:-172.17.0.1}"
-                            """,
-                            returnStdout: true
-                        ).trim()
-                        echo "DOCKER_HOST_IP detectada: ${DOCKER_HOST_IP}"
+                        // Asegurar que el directorio .m2 existe para compartir cache
+                        sh 'mkdir -p ~/.m2'
+                        def workspace = pwd()
+                        def m2Cache = "${env.HOME}/.m2"
+                        sh """
+                            echo "=== Ejecutando Integration Tests en contenedor Docker con --network host ==="
+                            echo "Workspace: ${workspace}"
+                            echo "M2 cache: ${m2Cache}"
+                            docker run --rm \\
+                                --network host \\
+                                --name it-test-${BUILD_NUMBER} \\
+                                -v ${workspace}:/workspace \\
+                                -v ${m2Cache}:/root/.m2 \\
+                                -w /workspace \\
+                                -e TESTCONTAINERS_RYUK_DISABLED=true \\
+                                -e TESTCONTAINERS_REUSE_ENABLE=false \\
+                                -v /var/run/docker.sock:/var/run/docker.sock \\
+                                maven:3.9.6-eclipse-temurin-17 \\
+                                mvn test -Dtest='*IntegrationTest,*IntegrationTests' -DfailIfNoTests=false \\
+                                    -Dtestcontainers.ryuk.disabled=true \\
+                                    -Dtestcontainers.reuse.enable=false
+                        """
                     }
-                    sh """
-                        export TESTCONTAINERS_HOST_OVERRIDE=${DOCKER_HOST_IP}
-                        echo "Ejecutando Integration Tests con TESTCONTAINERS_HOST_OVERRIDE=\${TESTCONTAINERS_HOST_OVERRIDE}"
-                        echo "Esto indica a Testcontainers que use \${TESTCONTAINERS_HOST_OVERRIDE} como IP del host"
-                        mvn test -Dtest='*IntegrationTest,*IntegrationTests' -DfailIfNoTests=false \
-                            -Dtestcontainers.host.override=${DOCKER_HOST_IP}
-                    """
                 }
             }
             post {
