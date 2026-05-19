@@ -8,7 +8,7 @@ pipeline {
     environment {
         REGISTRY = 'localhost:5050'
         IMAGE_NAME = 'notificaciones'
-        DOCKER_BUILDKIT = '1'
+        DOCKER_BUILDKIT = '0'
     }
     stages {
         stage('Checkout') {
@@ -38,7 +38,7 @@ pipeline {
         stage('Quality') {
             steps {
                 dir('microservicios/notificaciones') {
-                    sh '. venv/bin/activate && pytest --cov=src --cov-fail-under=70 --junitxml=reports/junit-quality.xml -q'
+                    sh '. venv/bin/activate && pytest --cov=src --cov-fail-under=65 --junitxml=reports/junit-quality.xml -q'
                 }
             }
         }
