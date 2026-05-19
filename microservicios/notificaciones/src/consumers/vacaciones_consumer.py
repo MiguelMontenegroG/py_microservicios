@@ -116,9 +116,9 @@ async def start_vacaciones_consumer() -> None:
 
 async def start_all_consumers() -> None:
     """Inicia todos los consumers en paralelo."""
-    from src.consumers.cuenta_consumer import start_cuenta_consumer
+    from src.consumers.cuenta_consumer import start_all_cuenta_consumers
 
     await asyncio.gather(
-        start_cuenta_consumer(),
+        start_all_cuenta_consumers(),
         start_vacaciones_consumer(),
     )

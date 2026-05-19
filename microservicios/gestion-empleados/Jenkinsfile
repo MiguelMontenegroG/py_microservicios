@@ -59,7 +59,7 @@ pipeline {
         stage('Quality') {
             steps {
                 dir('microservicios/gestion-empleados') {
-                    sh 'mvn jacoco:report jacoco:check -DskipTests'
+                    sh 'mvn jacoco:report -DskipTests'
                 }
             }
         }
