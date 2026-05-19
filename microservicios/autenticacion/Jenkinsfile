@@ -60,21 +60,23 @@ pipeline {
                                         -Dtestcontainers.ryuk.disabled=true \\
                                         -Dtestcontainers.reuse.enable=false
                             """
+                        }
+                    }
+                }
+            }
+            post {
+                always {
+                    junit 'microservicios/autenticacion/target/surefire-reports/*.xml'
                 }
             }
         }
-            }
-            post {
-                always { junit 'microservicios/autenticacion/target/surefire-reports/*.xml' }
-                }
-            }
         stage('Quality') {
             steps {
                 dir('microservicios/autenticacion') {
                     sh 'mvn jacoco:report jacoco:check -DskipTests'
+                }
+            }
         }
-    }
-    }
         stage('Package') {
             steps {
                 dir('microservicios/autenticacion') {
