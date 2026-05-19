@@ -312,10 +312,11 @@ services:
     networks: [observability-network]
 
   filebeat:
-    image: elastic/filebeat:8.13.0
+    build:
+      context: ./observabilidad/logs
+      dockerfile: Dockerfile.filebeat
     user: root
     volumes:
-      - ./observabilidad/logs/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:

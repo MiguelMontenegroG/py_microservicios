@@ -551,60 +551,143 @@ py_microservicios/
 
 ---
 
-## Comandos Útiles
+## Comandos Docker Esenciales
 
-**Gestión del sistema:**
+### Gestion de contenedores
+
 ```bash
-# Ver estado de todos los contenedores
+# Listar todos los contenedores (en ejecucion)
+docker ps
+
+# Listar todos los contenedores (incluyendo detenidos)
+docker ps -a
+
+# Ver solo los nombres y estado de los servicios del sistema
 docker-compose ps
 
-# Ver logs en tiempo real (todos los servicios)
+# Ver el estado de salud de cada contenedor
+docker-compose ps | grep -E "Name|Up|Exit|healthy|unhealthy"
+```
+
+En PowerShell:
+```powershell
+docker-compose ps
+```
+
+### Logs
+
+```bash
+# Logs de todos los servicios en tiempo real
 docker-compose logs -f
 
-# Ver logs de un servicio específico
-docker-compose logs -f notificaciones
+# Logs de un servicio especifico
+docker-compose logs -f gestion-vacaciones
 
-# Reiniciar un servicio sin detener los demás
+# Ultimas N lineas de un servicio
+docker-compose logs --tail 50 notificaciones
+
+# Logs de un contenedor por nombre directo
+docker logs proyecto-final-microservicios-api-gateway-1 --tail 20
+```
+
+### Arrancar y detener
+
+```bash
+# Levantar todo el sistema
+docker-compose up -d
+
+# Reconstruir y levantar un servicio especifico
+docker-compose up -d --build notificaciones
+
+# Detener todo (preserva datos en volumenes)
+docker-compose down
+
+# Detener todo y borrar volumenes (BORRA DATOS - reset completo)
+docker-compose down -v
+
+# Reiniciar un servicio
 docker-compose restart gestion-empleados
 
-# Reconstruir y reiniciar un servicio
-docker-compose up -d --build autenticacion
+# Pausar un servicio (lo deja inaccesible pero sin detenerlo)
+docker-compose pause notificaciones
+
+# Reanudar un servicio pausado
+docker-compose unpause notificaciones
 ```
 
-**Verificación rápida:**
+### Informacion del sistema
+
 ```bash
-# Health check de todos los servicios
-for port in 8080 8081 8082 8083 8084 8085; do
-  echo -n "Puerto $port: "
-  curl -s http://localhost:$port/health | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status','?'))"
-done
+# Ver recursos usados por cada contenedor (CPU, memoria, red)
+docker stats
 
-# Ver queues de RabbitMQ y cantidad de mensajes
-curl -s -u guest:guest http://localhost:15672/api/queues | \
-  python3 -c "import sys,json; [print(f\"{q['name']}: {q['messages']} mensajes\") for q in json.load(sys.stdin)]"
+# Ver cuanta RAM usa cada servicio
+docker stats --no-stream
 
-# Ver emails en MailHog
-curl -s http://localhost:8025/api/v2/messages | \
-  python3 -c "import sys,json; d=json.load(sys.stdin); [print(m['Content']['Headers']['Subject']) for m in d.get('items',[])]"
+# Ver redes creadas por docker-compose
+docker network ls | Select-String "proyecto-final"
+
+# Ver el IP interno de un contenedor
+docker inspect proyecto-final-microservicios-rabbitmq-1 | grep IPAddress
+
+# Ver variables de entorno de un contenedor en ejecucion
+docker exec proyecto-final-microservicios-autenticacion-1 env | sort
 ```
 
-**Base de datos:**
+### Ejecutar comandos dentro de un contenedor
+
 ```bash
-# Conectar a PostgreSQL de empleados
-docker exec -it $(docker-compose ps -q db-empleados) psql -U empleados_user -d empleados_db
+# Shell interactivo dentro de un contenedor (Linux)
+docker exec -it proyecto-final-microservicios-db-empleados-1 sh
 
-# Conectar a MongoDB de perfiles
-docker exec -it $(docker-compose ps -q mongo-perfiles) mongosh -u perfiles_user -p perfiles_pass perfiles_db
+# Shell en un contenedor de base de datos PostgreSQL
+docker exec -it proyecto-final-microservicios-db-auth-1 psql -U auth_user -d auth_db
+
+# Shell en MongoDB
+docker exec -it proyecto-final-microservicios-mongo-perfiles-1 mongosh -u perfiles_user -p perfiles_pass perfiles_db
+
+# Ejecutar un comando sin entrar al contenedor
+docker exec proyecto-final-microservicios-rabbitmq-1 rabbitmqctl list_queues name consumers messages
 ```
 
-**RabbitMQ:**
+### Limpieza y mantenimiento
+
 ```bash
-# Listar queues con sus consumidores
-docker exec $(docker-compose ps -q rabbitmq) rabbitmqctl list_queues name consumers messages
+# Ver imagenes construidas para el proyecto
+docker images | Select-String "proyecto-final"
 
-# Purgar una queue (útil para limpiar mensajes de prueba)
-docker exec $(docker-compose ps -q rabbitmq) rabbitmqctl purge_queue notif.cuenta.activada
+# Eliminar contenedores detenidos (libera espacio)
+docker container prune -f
+
+# Eliminar imagenes no usadas
+docker image prune -a -f
+
+# Ver volumenes (datos persistentes)
+docker volume ls | Select-String "proyecto-final"
+
+# Ver el tamano de cada volumen
+docker system df -v | Select-String "proyecto-final" -Context 0,3
 ```
+
+### Diagnosticos rapidos
+
+```bash
+# Verificar que todos los health checks pasan
+curl -s http://localhost:8080/health
+# Ejemplo de respuesta esperada:
+# {"status":"UP","services":{"auth":"UP","empleados":"UP","perfiles":"UP","vacaciones":"UP","notificaciones":"UP"}}
+
+# Verificar RabbitMQ (debe responder con credenciales guest:guest)
+curl -s -u guest:guest http://localhost:15672/api/overview | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'RabbitMQ: {d[\"rabbitmq_version\"]} - {d[\"cluster_name\"]}')"
+
+# Ver colas con mensajes acumulados
+curl -s -u guest:guest http://localhost:15672/api/queues | python3 -c "
+import sys,json
+queues = json.load(sys.stdin)
+for q in queues:
+    if q['messages'] > 0:
+        print(f\"  {q['name']}: {q['messages']} msgs - {q['consumers']} consumers\")
+"
 
 ---
 
