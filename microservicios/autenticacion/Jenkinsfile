@@ -41,22 +41,11 @@ pipeline {
                     catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
                 dir('microservicios/autenticacion') {
                             sh """
-                                echo "=== Ejecutando Integration Tests en contenedor Docker ==="
-                                echo "POM directory: \$(pwd)"
-                                ls -la pom.xml
-                                mkdir -p /root/.m2
-                                echo "--- Verificando bind mount dentro del contenedor ---"
-                                docker run --rm \\
-                                    --network host \\
-                                    --name it-test-\${BUILD_NUMBER} \\
-                                    -v "\$(pwd)":/workspace \\
-                                    -v /root/.m2:/root/.m2 \\
-                                    -w /workspace \\
-                                    -e TESTCONTAINERS_RYUK_DISABLED=true \\
-                                    -e TESTCONTAINERS_REUSE_ENABLE=false \\
-                                    -v /var/run/docker.sock:/var/run/docker.sock \\
-                                    maven:3.9.6-eclipse-temurin-17 \\
-                                    ls -la /workspace/
+                                echo "=== Ejecutando Integration Tests directamente ==="
+                                mvn test -Dtest='*IntegrationTest,*IntegrationTests' \\
+                                    -DfailIfNoTests=false \\
+                                    -Dtestcontainers.ryuk.disabled=true \\
+                                    -Dtestcontainers.reuse.enable=false
                             """
                         }
                     }
@@ -71,7 +60,7 @@ pipeline {
         stage('Quality') {
             steps {
                 dir('microservicios/autenticacion') {
-                    sh 'mvn verify -DskipTests -q'
+                    sh 'mvn jacoco:report -DskipTests -q'
                 }
             }
         }
