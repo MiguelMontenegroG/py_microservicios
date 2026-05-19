@@ -298,18 +298,19 @@ services:
       timeout: 10s
       retries: 5
 
-  logstash:
-    image: logstash:8.13.0
-    volumes:
-      - ./observabilidad/logs/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
-    ports:
-      - "5000:5000/tcp"
-      - "5000:5000/udp"
-      - "5044:5044"
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
-    networks: [observability-network]
+  # logstash deshabilitado - causaba problemas de rendimiento
+  # logstash:
+  #   image: logstash:8.13.0
+  #   volumes:
+  #     - ./observabilidad/logs/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+  #   ports:
+  #     - "5000:5000/tcp"
+  #     - "5000:5000/udp"
+  #     - "5044:5044"
+  #   depends_on:
+  #     elasticsearch:
+  #       condition: service_healthy
+  #   networks: [observability-network]
 
   filebeat:
     build:
@@ -319,8 +320,6 @@ services:
     volumes:
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-    depends_on:
-      - logstash
     networks: [observability-network]
 
   kibana:

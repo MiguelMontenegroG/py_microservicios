@@ -24,30 +24,19 @@ pipeline {
         stage('Test') {
             steps {
                 dir('microservicios/gestion-perfiles') {
-                    sh 'pytest --cov=src --cov-report=xml --cov-report=term tests/'
+                    sh 'pytest --cov=src --cov-report=xml --cov-report=term --junitxml=reports/junit.xml tests/'
                 }
             }
             post {
                 always {
-                    junit 'microservicios/gestion-perfiles/**/test-reports/*.xml'
+                    junit 'microservicios/gestion-perfiles/reports/junit.xml'
                 }
             }
         }
         stage('Quality') {
             steps {
                 dir('microservicios/gestion-perfiles') {
-                    script {
-                        def coverage = sh(
-                            script: "python -c \"import xml.etree.ElementTree as ET; root = ET.parse('coverage.xml').getroot(); print(root.attrib.get('line-rate', 0))\"",
-                            returnStdout: true
-                        ).trim()
-                        def coveragePercent = (coverage.toFloat() * 100).round(2)
-                        echo "Cobertura actual: ${coveragePercent}%"
-                        if (coveragePercent < 70.0) {
-                            error "Cobertura insuficiente: ${coveragePercent}% (minimo requerido: 70%)"
-                        }
-                        sh 'pytest --cov=src --cov-fail-under=70 -q'
-                    }
+                    sh 'pytest --cov=src --cov-fail-under=70 --cov-report=term -q tests/'
                 }
             }
         }

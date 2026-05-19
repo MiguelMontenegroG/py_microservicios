@@ -57,11 +57,39 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 request.setAttribute("empleadoId", empleadoId);
                 request.setAttribute("rol", rol);
 
-                log.debug("Usuario autenticado: {} (empleadoId: {}, rol: {})", username, empleadoId, rol);
+                log.debug("Usuario autenticado por token: {} (empleadoId: {}, rol: {})", username, empleadoId, rol);
 
             } catch (Exception e) {
                 log.warn("Error validando token JWT: {}", e.getMessage());
                 SecurityContextHolder.clearContext();
+            }
+        } else {
+            // Si no hay token, intentar autenticar por header interno X-Empleado-Id (desde API Gateway)
+            String empleadoIdHeader = request.getHeader("X-Empleado-Id");
+            String rolHeader = request.getHeader("X-Rol");
+
+            if (StringUtils.hasText(empleadoIdHeader) && StringUtils.hasText(rolHeader)) {
+                try {
+                    UUID empleadoId = UUID.fromString(empleadoIdHeader);
+
+                    List<SimpleGrantedAuthority> authorities = List.of(
+                            new SimpleGrantedAuthority("ROLE_" + rolHeader)
+                    );
+
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken("internal", null, authorities);
+                    authentication.setDetails(empleadoId);
+
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+
+                    request.setAttribute("empleadoId", empleadoId);
+                    request.setAttribute("rol", rolHeader);
+
+                    log.debug("Usuario autenticado por header interno: empleadoId: {}, rol: {}", empleadoId, rolHeader);
+
+                } catch (Exception e) {
+                    log.warn("Error autenticando por header X-Empleado-Id: {}", e.getMessage());
+                }
             }
         }
 

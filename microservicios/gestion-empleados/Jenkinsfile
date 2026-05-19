@@ -42,50 +42,16 @@ pipeline {
         stage('Integration Tests') {
             steps {
                 dir('microservicios/gestion-empleados') {
-                    // En Docker-in-Docker, los contenedores que Testcontainers crea
-                    // (PostgreSQL, RabbitMQ) se ejecutan en el host Docker, no dentro
-                    // del contenedor Jenkins. Como Jenkins esta en una red personalizada
-                    // (cicd-network), no puede alcanzar los contenedores de Testcontainers
-                    // que estan en el bridge por defecto (docker0) del host.
-                    //
-                    // Solucion: ejecutar los Integration Tests dentro de un contenedor
-                    // Docker temporal con --network host, que tiene acceso completo a
-                    // la red del host y puede ver los contenedores de Testcontainers.
-                    //
-                    // El contenedor usa la misma imagen Maven y monta:
-                    //   - El codigo fuente (/workspace)
-                    //   - El cache de Maven (~/.m2) para reutilizar dependencias
-                    //   - El socket de Docker para que Testcontainers pueda crear contenedores
-                    script {
-                        // Asegurar que el directorio .m2 existe para compartir cache
-                        sh 'mkdir -p ~/.m2'
-                        def workspace = pwd()
-                        def m2Cache = "${env.HOME}/.m2"
-                        sh """
-                            echo "=== Ejecutando Integration Tests en contenedor Docker con --network host ==="
-                            echo "Workspace: ${workspace}"
-                            echo "M2 cache: ${m2Cache}"
-                            docker run --rm \\
-                                --network host \\
-                                --name it-test-${BUILD_NUMBER} \\
-                                -v ${workspace}:/workspace \\
-                                -v ${m2Cache}:/root/.m2 \\
-                                -w /workspace \\
-                                -e TESTCONTAINERS_RYUK_DISABLED=true \\
-                                -e TESTCONTAINERS_REUSE_ENABLE=false \\
-                                -v /var/run/docker.sock:/var/run/docker.sock \\
-                                maven:3.9.6-eclipse-temurin-17 \\
-                                mvn test -Dtest='*IntegrationTest,*IntegrationTests' -DfailIfNoTests=false \\
-                                    -Dtestcontainers.ryuk.disabled=true \\
-                                    -Dtestcontainers.reuse.enable=false
-                        """
-                    }
+                    sh """
+                        echo "=== Ejecutando Integration Tests directamente ==="
+                        mvn test -Dtest='*IntegrationTest,*IntegrationTests' -DfailIfNoTests=false \\
+                            -Dtestcontainers.ryuk.disabled=true \\
+                            -Dtestcontainers.reuse.enable=false
+                    """
                 }
             }
             post {
-                always {
-                    junit 'microservicios/gestion-empleados/target/surefire-reports/*.xml'
-                }
+                always { junit 'microservicios/gestion-empleados/target/surefire-reports/*.xml' }
             }
         }
         stage('Quality') {

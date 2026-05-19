@@ -26,19 +26,19 @@ pipeline {
         stage('Test') {
             steps {
                 dir('microservicios/notificaciones') {
-                    sh '. venv/bin/activate && pytest --cov=src --cov-report=xml -q'
+                    sh '. venv/bin/activate && pytest --cov=src --cov-report=xml --junitxml=reports/junit.xml -q'
                 }
             }
             post {
                 always {
-                    junit 'microservicios/notificaciones/**/test-reports/*.xml'
+                    junit 'microservicios/notificaciones/reports/junit.xml'
                 }
             }
         }
         stage('Quality') {
             steps {
                 dir('microservicios/notificaciones') {
-                    sh '. venv/bin/activate && pytest --cov=src --cov-fail-under=70 -q'
+                    sh '. venv/bin/activate && pytest --cov=src --cov-fail-under=70 --junitxml=reports/junit-quality.xml -q'
                 }
             }
         }

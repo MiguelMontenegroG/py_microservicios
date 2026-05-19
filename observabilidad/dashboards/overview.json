@@ -211,9 +211,10 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
-          "expr": "up{job=~\"api-gateway|autenticacion|gestion-empleados|gestion-perfiles|gestion-vacaciones|notificaciones\"}",
+          "expr": "up",
           "legendFormat": "{{ job }}",
-          "format": "table"
+          "format": "table",
+          "instant": true
         }
       ],
       "transformations": [
@@ -223,13 +224,22 @@
             "excludeByName": {
               "Time": true,
               "instance": true,
-              "__name__": true,
-              "job": false
+              "__name__": true
             },
             "indexByName": {},
             "renameByName": {
               "job": "Servicio",
-              "Value": "Estado"
+              "Value": "Estado (#1)"
+            }
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {
+              "Estado": {
+                "type": "number"
+              }
             }
           }
         }

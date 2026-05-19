@@ -4,7 +4,13 @@ module.exports = {
   testMatch: [
     '**/*.test.js',
   ],
-  setupFilesAfterFramework: ['<rootDir>/jest.setup.js'],
+  reporters: [
+    'default',
+    ['jest-junit', {
+      outputDirectory: 'reports',
+      outputName: 'junit.xml',
+    }],
+  ],
   collectCoverageFrom: [
     'src/**/*.js',
     '!src/index.js',
