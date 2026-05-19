@@ -41,9 +41,9 @@ pipeline {
                     catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
                 dir('microservicios/autenticacion') {
                             sh """
-                                echo "=== Ejecutando Integration Tests en contenedor Docker con --network host ==="
-                                echo "Workspace: \$(pwd)"
-                                echo "M2 cache: /root/.m2"
+                                echo "=== Ejecutando Integration Tests en contenedor Docker ==="
+                                echo "POM directory: \$(pwd)"
+                                ls -la pom.xml
                                 mkdir -p /root/.m2
                                 docker run --rm \\
                                     --network host \\
@@ -60,23 +60,23 @@ pipeline {
                                         -Dtestcontainers.ryuk.disabled=true \\
                                         -Dtestcontainers.reuse.enable=false
                             """
-                        }
-                    }
                 }
+            }
+        }
             }
             post {
                 always {
                     junit 'microservicios/autenticacion/target/surefire-reports/*.xml'
-                }
+}
             }
         }
         stage('Quality') {
             steps {
                 dir('microservicios/autenticacion') {
                     sh 'mvn jacoco:report jacoco:check -DskipTests'
-                }
-            }
-        }
+    }
+    }
+}
         stage('Package') {
             steps {
                 dir('microservicios/autenticacion') {
