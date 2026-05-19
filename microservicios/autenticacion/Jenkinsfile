@@ -37,34 +37,50 @@ pipeline {
         }
         stage('Integration Tests') {
             steps {
-                dir('microservicios/autenticacion') {
+                script {
                     catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
-                        sh """
-                            echo "=== Ejecutando Integration Tests (Testcontainers) ==="
-                            mvn test -Dtest='*IntegrationTest,*IntegrationTests' -DfailIfNoTests=false \\
-                                -Dtestcontainers.ryuk.disabled=true \\
-                                -Dtestcontainers.reuse.enable=false
-                        """
-                    }
+                dir('microservicios/autenticacion') {
+                            sh """
+                                echo "=== Ejecutando Integration Tests en contenedor Docker con --network host ==="
+                                echo "Workspace: \$(pwd)"
+                                echo "M2 cache: /root/.m2"
+                                mkdir -p /root/.m2
+                                docker run --rm \\
+                                    --network host \\
+                                    --name it-test-\${BUILD_NUMBER} \\
+                                    -v "\$(pwd)":/workspace \\
+                                    -v /root/.m2:/root/.m2 \\
+                                    -w /workspace \\
+                                    -e TESTCONTAINERS_RYUK_DISABLED=true \\
+                                    -e TESTCONTAINERS_REUSE_ENABLE=false \\
+                                    -v /var/run/docker.sock:/var/run/docker.sock \\
+                                    maven:3.9.6-eclipse-temurin-17 \\
+                                    mvn test -Dtest='*IntegrationTest,*IntegrationTests' \\
+                                        -DfailIfNoTests=false \\
+                                        -Dtestcontainers.ryuk.disabled=true \\
+                                        -Dtestcontainers.reuse.enable=false
+                            """
                 }
+            }
+        }
             }
             post {
                 always { junit 'microservicios/autenticacion/target/surefire-reports/*.xml' }
+                }
             }
-        }
         stage('Quality') {
             steps {
                 dir('microservicios/autenticacion') {
                     sh 'mvn jacoco:report jacoco:check -DskipTests'
-                }
-            }
         }
+    }
+    }
         stage('Package') {
             steps {
                 dir('microservicios/autenticacion') {
                     sh 'docker build -t ${REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER} .'
                     sh 'docker tag ${REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER} ${REGISTRY}/${IMAGE_NAME}:latest'
-                }
+}
             }
         }
     }
