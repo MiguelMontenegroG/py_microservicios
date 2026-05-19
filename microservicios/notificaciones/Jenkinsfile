@@ -8,7 +8,7 @@ pipeline {
     environment {
         REGISTRY = 'localhost:5050'
         IMAGE_NAME = 'notificaciones'
-        DOCKER_BUILDKIT = '1'
+        DOCKER_BUILDKIT = '0'
     }
     stages {
         stage('Checkout') {
@@ -45,7 +45,8 @@ pipeline {
         stage('Package') {
             steps {
                 dir('microservicios/notificaciones') {
-                    sh 'docker build -t ${REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER} .'
+                    sh 'docker pull python:3.12-alpine || true'
+                    sh 'docker build --no-cache --pull -t ${REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER} .'
                     sh 'docker tag ${REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER} ${REGISTRY}/${IMAGE_NAME}:latest'
                 }
             }
