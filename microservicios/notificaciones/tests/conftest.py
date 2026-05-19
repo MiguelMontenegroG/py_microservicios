@@ -6,14 +6,6 @@ from httpx import AsyncClient, ASGITransport
 from src.main import app
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """Crea un event loop para toda la sesion de tests."""
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
-
-
 @pytest.fixture
 async def client() -> AsyncGenerator[AsyncClient, None]:
     """

@@ -25,7 +25,7 @@ async def test_health_endpoint_dependencies_down(client):
     """Verifica health cuando dependencias estan down."""
     with patch("src.consumers.cuenta_consumer.is_consumer_running", return_value=False):
         with patch("src.consumers.vacaciones_consumer.is_consumer_running", return_value=False):
-            with patch("src.email_service.check_smtp_connection", new_callable=AsyncMock, return_value=False):
+            with patch("src.main.check_smtp_connection", new_callable=AsyncMock, return_value=False):
                 response = await client.get("/health")
                 assert response.status_code == 200
                 data = response.json()
@@ -39,7 +39,7 @@ async def test_health_endpoint_rabbitmq_up_smtp_down(client):
     """Verifica health cuando rabbitmq esta up pero smtp down."""
     with patch("src.consumers.cuenta_consumer.is_consumer_running", return_value=True):
         with patch("src.consumers.vacaciones_consumer.is_consumer_running", return_value=False):
-            with patch("src.email_service.check_smtp_connection", new_callable=AsyncMock, return_value=False):
+            with patch("src.main.check_smtp_connection", new_callable=AsyncMock, return_value=False):
                 response = await client.get("/health")
                 assert response.status_code == 200
                 data = response.json()
