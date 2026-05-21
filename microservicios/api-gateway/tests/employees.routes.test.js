@@ -24,16 +24,14 @@ describe('Employees Routes', () => {
 
   beforeEach(() => {
     // Mock de validacion JWT para todas las rutas protegidas
+    // La respuesta debe coincidir con ValidateTokenResponse del auth-service
     nock(config.services.AUTH_URL)
       .post('/auth/validate', { token: 'eyJhbGciOiJIUzI1NiJ9.valid-token' })
       .reply(200, {
-        success: true,
-        data: {
-          valid: true,
-          empleadoId: 'autenticado-id',
-          rol: 'ADMIN',
-        },
-        timestamp: new Date().toISOString(),
+        valid: true,
+        empleadoId: 'autenticado-id',
+        rol: 'ADMIN',
+        username: 'admin@empresa.com',
       });
   });
 

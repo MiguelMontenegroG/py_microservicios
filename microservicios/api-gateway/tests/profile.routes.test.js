@@ -11,13 +11,10 @@ describe('Profile Routes', () => {
     nock(config.services.AUTH_URL)
       .post('/auth/validate', { token: 'eyJhbGciOiJIUzI1NiJ9.profile-token' })
       .reply(200, {
-        success: true,
-        data: {
-          valid: true,
-          empleadoId,
-          rol: 'EMPLEADO',
-        },
-        timestamp: new Date().toISOString(),
+        valid: true,
+        empleadoId,
+        rol: 'EMPLEADO',
+        username: 'empleado@empresa.com',
       });
   });
 

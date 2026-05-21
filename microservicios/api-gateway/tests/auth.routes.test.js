@@ -77,13 +77,6 @@ describe('Auth Routes', () => {
     });
 
     it('debe retornar 400 cuando no se envia cuerpo', async () => {
-      const res = await request(app)
-        .post('/auth/login')
-        .send({})
-        .expect('Content-Type', /json/);
-
-      // El gateway reenvia al microservicio, que devolvera 400
-      // pero mockeamos que el auth service devuelve 400
       nock(config.services.AUTH_URL)
         .post('/auth/login', {})
         .reply(400, {
@@ -95,17 +88,19 @@ describe('Auth Routes', () => {
           timestamp: new Date().toISOString(),
         });
 
-      const res2 = await request(app)
+      const res = await request(app)
         .post('/auth/login')
         .send({})
         .expect('Content-Type', /json/);
 
-      expect(res2.status).toBe(400);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBeDefined();
     });
   });
 
   describe('POST /auth/change-password (protegida)', () => {
     const validToken = 'Bearer eyJhbGciOiJIUzI1NiJ9.valid-token';
+    const rawToken = 'eyJhbGciOiJIUzI1NiJ9.valid-token';
 
     it('debe retornar 401 si no se envia token', async () => {
       const res = await request(app)
@@ -122,11 +117,12 @@ describe('Auth Routes', () => {
 
     it('debe retornar 401 si el token es invalido', async () => {
       nock(config.services.AUTH_URL)
-        .post('/auth/validate', { token: 'eyJhbGciOiJIUzI1NiJ9.valid-token' })
+        .post('/auth/validate', { token: rawToken })
         .reply(200, {
-          success: true,
-          data: { valid: false, reason: 'Token expirado' },
-          timestamp: new Date().toISOString(),
+          valid: false,
+          username: null,
+          empleadoId: null,
+          rol: null,
         });
 
       const res = await request(app)
@@ -144,16 +140,13 @@ describe('Auth Routes', () => {
 
     it('debe retornar 200 si el token es valido y la contrasena se cambia', async () => {
       // Mock de validacion de token exitosa
-      nock(config.services.AUTH_URL)
-        .post('/auth/validate', { token: 'eyJhbGciOiJIUzI1NiJ9.valid-token' })
+      const validateScope = nock(config.services.AUTH_URL)
+        .post('/auth/validate', { token: rawToken })
         .reply(200, {
-          success: true,
-          data: {
-            valid: true,
-            empleadoId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-            rol: 'EMPLEADO',
-          },
-          timestamp: new Date().toISOString(),
+          valid: true,
+          empleadoId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+          rol: 'EMPLEADO',
+          username: 'test@empresa.com',
         });
 
       // Mock de cambio de password exitoso
