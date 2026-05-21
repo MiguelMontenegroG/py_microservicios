@@ -1,8 +1,8 @@
 ﻿version: "3.9"
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # REDES
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 networks:
   frontend-network:
   backend-network:
@@ -11,9 +11,9 @@ networks:
   observability-network:
   cicd-network:
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # VOLÚMENES PERSISTENTES
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 volumes:
   db-empleados-data:
   db-auth-data:
@@ -26,12 +26,12 @@ volumes:
   jenkins-data:
   registry-data:
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # SERVICIOS
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 services:
 
-  # ── BASES DE DATOS ──────────────────────────
+  # -- BASES DE DATOS --------------------------
 
   db-empleados:
     image: postgres:16-alpine
@@ -94,7 +94,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── MESSAGE BROKER ───────────────────────────
+  # -- MESSAGE BROKER ---------------------------
 
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
@@ -113,7 +113,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── MICROSERVICIOS PRINCIPALES ───────────────
+  # -- MICROSERVICIOS PRINCIPALES ---------------
 
   gestion-empleados:
     build:
@@ -270,7 +270,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── SERVIDOR DE CORREO (DEV) ─────────────────
+  # -- SERVIDOR DE CORREO (DEV) -----------------
 
   mailhog:
     image: mailhog/mailhog:latest
@@ -279,7 +279,7 @@ services:
       - "8025:8025"   # Web UI
     networks: [backend-network]
 
-  # ── OBSERVABILIDAD: LOGS (ELK) ───────────────
+  # -- OBSERVABILIDAD: LOGS (ELK) ---------------
 
   elasticsearch:
     image: elasticsearch:8.13.0
@@ -343,7 +343,7 @@ services:
         condition: service_healthy
     networks: [observability-network]
 
-  # ── OBSERVABILIDAD: MÉTRICAS ─────────────────
+  # -- OBSERVABILIDAD: MÉTRICAS -----------------
 
   prometheus:
     image: prom/prometheus:v2.51.0
@@ -374,7 +374,7 @@ services:
       - prometheus
     networks: [observability-network]
 
-  # ── CI/CD ────────────────────────────────────
+  # -- CI/CD ------------------------------------
 
   jenkins:
     build:
@@ -408,3 +408,23 @@ services:
     ports:
       - "5050:5000"
     networks: [cicd-network]
+
+  # -- PRUEBAS E2E (BDD) ------------------------
+
+  e2e-tests:
+    build:
+      context: ./e2e-tests
+      dockerfile: Dockerfile
+    environment:
+      BASE_URL: http://api-gateway:8080
+      ADMIN_EMAIL: admin@empresa.com
+      ADMIN_PASSWORD: Admin123!
+      USER_EMAIL: user@empresa.com
+      USER_PASSWORD: User123!
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    networks:
+      - backend-network
+    volumes:
+      - ./e2e-tests/reports:/app/reports

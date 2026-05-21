@@ -1,0 +1,21 @@
+{
+  "name": "e2e-tests",
+  "version": "1.0.0",
+  "description": "BDD end-to-end tests for Employee Management Microservices System",
+  "scripts": {
+    "pretest": "node src/support/seed.js",
+    "test": "cucumber-js --exit --format message:reports/cucumber-messages.ndjson --format json:reports/cucumber-report.json && node src/report/generate-report.js",
+    "seed": "node src/support/seed.js",
+    "test:json": "cucumber-js --exit --format json:reports/cucumber-report.json",
+    "test:legacy": "cucumber-js --exit --format json:reports/cucumber-report.json; node src/report/generate-html.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "@cucumber/cucumber": "^10.0.0",
+    "@cucumber/html-formatter": "^21.0.0",
+    "@cucumber/messages": "^25.0.0",
+    "dotenv": "^16.0.0",
+    "@cucumber/message-streams": "^4.0.0",
+    "uuid": "^9.0.0"
+  }
+}

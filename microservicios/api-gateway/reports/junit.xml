@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="jest tests" tests="8" failures="1" errors="0" time="1.388">
+  <testsuite name="Auth Routes" errors="0" failures="1" skipped="7" timestamp="2026-05-21T04:46:42" time="1.316" tests="8">
+    <testcase classname="Auth Routes POST /auth/login debe retornar 200 con token cuando las credenciales son correctas" name="Auth Routes POST /auth/login debe retornar 200 con token cuando las credenciales son correctas" time="0">
+      <skipped/>
+    </testcase>
+    <testcase classname="Auth Routes POST /auth/login debe retornar 401 cuando las credenciales son invalidas" name="Auth Routes POST /auth/login debe retornar 401 cuando las credenciales son invalidas" time="0">
+      <skipped/>
+    </testcase>
+    <testcase classname="Auth Routes POST /auth/login debe retornar 502 cuando el servicio de autenticacion no esta disponible" name="Auth Routes POST /auth/login debe retornar 502 cuando el servicio de autenticacion no esta disponible" time="0">
+      <skipped/>
+    </testcase>
+    <testcase classname="Auth Routes POST /auth/login debe retornar 400 cuando no se envia cuerpo" name="Auth Routes POST /auth/login debe retornar 400 cuando no se envia cuerpo" time="0">
+      <skipped/>
+    </testcase>
+    <testcase classname="Auth Routes POST /auth/change-password (protegida) debe retornar 401 si no se envia token" name="Auth Routes POST /auth/change-password (protegida) debe retornar 401 si no se envia token" time="0">
+      <skipped/>
+    </testcase>
+    <testcase classname="Auth Routes POST /auth/change-password (protegida) debe retornar 401 si el token es invalido" name="Auth Routes POST /auth/change-password (protegida) debe retornar 401 si el token es invalido" time="0">
+      <skipped/>
+    </testcase>
+    <testcase classname="Auth Routes POST /auth/change-password (protegida) debe retornar 200 si el token es valido y la contrasena se cambia" name="Auth Routes POST /auth/change-password (protegida) debe retornar 200 si el token es valido y la contrasena se cambia" time="0.157">
+      <failure>Error: expect(received).toBe(expected) // Object.is equality
+
+Expected: 200
+Received: 401
+    at Object.toBe (C:\Users\ANGEL\Documents\proyecto-final-microservicios\microservicios\api-gateway\tests\auth.routes.test.js:180:26)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)</failure>
+    </testcase>
+    <testcase classname="Auth Routes POST /auth/change-password (protegida) debe retornar 502 si el servicio de autenticacion no responde al validar token" name="Auth Routes POST /auth/change-password (protegida) debe retornar 502 si el servicio de autenticacion no responde al validar token" time="0">
+      <skipped/>
+    </testcase>
+  </testsuite>
+</testsuites>
