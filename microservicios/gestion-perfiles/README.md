@@ -1,110 +1,106 @@
-# Gestión de Perfiles — Python / FastAPI
+# Gestión de Perfiles
 
-Microservicio que gestiona los perfiles extendidos de los empleados (foto, biografía, teléfono, dirección, redes sociales). Se utiliza MongoDB porque los perfiles tienen un esquema flexible que puede variar según las necesidades de cada empleado.
+Microservicio responsable de la información complementaria del empleado: foto, biografía, dirección, redes sociales. Usa MongoDB por la naturaleza flexible y opcional de sus campos. El perfil se crea automáticamente (vacío) al consumir el evento `empleado.creado`.
 
-## Stack Tecnológico
+**Lenguaje:** Python 3.12 · **Framework:** FastAPI · **Puerto:** 8083 · **BD:** MongoDB 7
 
-| Característica | Detalle |
-|---|---|
-| Lenguaje | Python 3.12 |
-| Framework | FastAPI 0.111 |
-| Puerto | 8083 |
-| Base de Datos | MongoDB 7 (colección: `perfiles`) |
-| Message Broker | RabbitMQ 3.13 (via aio-pika) |
-| Documentación | Swagger UI (integrada en FastAPI) |
-| Testing | pytest, pytest-asyncio, httpx, mongomock |
+---
 
 ## Endpoints
 
-| Método | Path | Descripción | Auth requerida |
-|---|---|---|---|
-| `GET` | `/health` | Health check del servicio | No |
-| `POST` | `/profiles` | Crear perfil vacío (uso interno desde eventos) | No |
-| `GET` | `/profiles/{empleado_id}` | Obtener perfil por empleadoId | X-Empleado-Id |
-| `PUT` | `/profiles/{empleado_id}` | Actualizar perfil (solo el propio empleado) | X-Empleado-Id |
-| `GET` | `/metrics` | Métricas en formato Prometheus | No |
+| Método | Path | Header requerido | Descripción |
+|--------|------|-----------------|-------------|
+| `GET` | `/health` | — | Estado del servicio y dependencias |
+| `POST` | `/profiles` | — | Crear perfil vacío (uso interno desde eventos) |
+| `GET` | `/profiles/{empleadoId}` | `X-Empleado-Id` | Obtener perfil por empleadoId |
+| `PUT` | `/profiles/{empleadoId}` | `X-Empleado-Id` | Actualizar perfil |
+| `GET` | `/docs` | — | Swagger UI (FastAPI auto-docs) |
+| `GET` | `/metrics` | — | Métricas Prometheus |
 
-> **Nota:** La validación de identidad se realiza mediante el header `X-Empleado-Id`. El API Gateway agrega este header automáticamente tras validar el JWT. Un empleado solo puede modificar su propio perfil.
+> El header `X-Empleado-Id` lo inyecta el API Gateway tras validar el JWT. El servicio verifica que el empleado solo pueda editar su propio perfil.
 
-## Esquema del Documento MongoDB
+---
+
+## Esquema del documento MongoDB
 
 ```json
 {
-  "empleadoId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "email": "juan.perez@empresa.com",
-  "nombre": "Juan",
-  "apellido": "Pérez",
-  "foto": "https://...",
-  "biografia": "Desarrollador senior con 10 años de experiencia",
-  "telefono": "+525512345678",
+  "empleadoId": "uuid-string",
+  "email": "ana@empresa.com",
+  "nombre": "Ana",
+  "apellido": "García",
+  "foto": null,
+  "biografia": null,
+  "telefono": null,
   "direccion": {
-    "calle": "Av. Principal 123",
-    "ciudad": "Ciudad de México",
-    "codigoPostal": "06600",
-    "pais": "México"
+    "calle": null,
+    "ciudad": null,
+    "codigoPostal": null,
+    "pais": null
   },
   "redesSociales": {
-    "linkedin": "https://linkedin.com/in/juanperez",
-    "github": "https://github.com/juanperez"
+    "linkedin": null,
+    "github": null
   },
   "archivado": false,
-  "createdAt": "2024-01-15T10:00:00Z",
-  "updatedAt": "2024-01-15T10:00:00Z"
+  "createdAt": "2024-01-15T10:30:00Z",
+  "updatedAt": "2024-01-15T10:30:00Z"
 }
 ```
 
-## Eventos que Consume
+Todos los campos excepto `empleadoId` son opcionales. El campo `archivado` se activa al eliminar el empleado (no se borra el documento — auditoría).
 
-| Cola | Evento | Acción |
+---
+
+## Eventos que consume
+
+| Queue | Evento | Acción |
 |---|---|---|
-| `perfiles.empleado.creado` | `empleado.creado` | Crear perfil vacío para el nuevo empleado |
-| `perfiles.empleado.actualizado` | `empleado.actualizado` | Sincronizar nombre y apellido |
-| `perfiles.empleado.eliminado` | `empleado.eliminado` | Archivar perfil (soft delete) |
+| `perfiles.empleado.creado` | `empleado.creado` | Crear documento vacío con empleadoId, email, nombre, apellido |
+| `perfiles.empleado.actualizado` | `empleado.actualizado` | Sincronizar nombre y apellido si cambiaron |
+| `perfiles.empleado.eliminado` | `empleado.eliminado` | Marcar `archivado=true` (el documento NO se elimina) |
 
-Los eventos se consumen del exchange `empleados.exchange` de RabbitMQ.
+Los consumers corren como tareas asyncio en background usando el patrón `lifespan` de FastAPI. Cada consumer tiene conexión RabbitMQ independiente con 10 reintentos automáticos.
 
-## Variables de Entorno
+---
 
-| Variable | Descripción | Valor por Defecto |
+## Variables de entorno
+
+| Variable | Descripción | Valor por defecto |
 |---|---|---|
-| `MONGO_URL` | URL de conexión a MongoDB | `mongodb://perfiles_user:perfiles_pass@localhost:27017/perfiles_db?authSource=admin` |
-| `RABBITMQ_URL` | URL de conexión a RabbitMQ | `amqp://guest:guest@localhost:5672` |
-| `PORT` | Puerto del servidor | `8083` |
+| `MONGO_URL` | URL de conexión MongoDB | `mongodb://perfiles_user:perfiles_pass@localhost:27017/perfiles_db?authSource=admin` |
+| `RABBITMQ_URL` | URL AMQP de RabbitMQ | `amqp://guest:guest@localhost:5672` |
+| `PORT` | Puerto del servicio | `8083` |
+| `SERVICE_NAME` | Nombre en logs | `gestion-perfiles` |
 
-## Cómo Correr los Tests
+---
+
+## Tests
 
 ```bash
-# Todos los tests
-pytest --cov=src
+# Desde la carpeta del microservicio
+pip install -r requirements.txt
+pytest --cov=src -v
 
-# Con reporte de cobertura HTML
-pytest --cov=src --cov-report=html
+# Con Docker (sin Python local)
+docker run --rm -v "${PWD}:/app" -w /app python:3.12-alpine \
+  sh -c "pip install -r requirements.txt -q && pytest --cov=src -q"
 ```
 
-> Los tests con Testcontainers requieren Docker.
+| Suite | Cantidad | Tipo |
+|---|---|---|
+| `test_perfil_service.py` | 9 | Unitarios (mongomock) |
+| `test_perfil_router.py` | 9 | Integración (httpx + ASGITransport) |
+| **Total** | **18** | **0 fallos** |
 
-## Health Check
+---
+
+## Levantar solo este servicio
 
 ```bash
+docker-compose up -d mongo-perfiles rabbitmq
+docker-compose up -d --build gestion-perfiles
+
+# Verificar
 curl http://localhost:8083/health
-```
-
-Respuesta esperada:
-```json
-{
-  "status": "UP",
-  "service": "gestion-perfiles",
-  "version": "1.0.0",
-  "timestamp": "2024-01-15T10:00:00Z",
-  "dependencies": {
-    "mongodb": "UP",
-    "rabbitmq": "UP"
-  }
-}
-```
-
-## Swagger UI
-
-```
-http://localhost:8083/docs
 ```

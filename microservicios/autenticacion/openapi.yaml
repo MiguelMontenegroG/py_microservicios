@@ -148,6 +148,39 @@ components:
           type: string
           format: date-time
 
+    ForgotPasswordRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          example: "juan.perez@empresa.com"
+
+    ResetPasswordRequest:
+      type: object
+      required:
+        - email
+        - codigo
+        - newPassword
+      properties:
+        email:
+          type: string
+          format: email
+          example: "juan.perez@empresa.com"
+        codigo:
+          type: string
+          minLength: 6
+          maxLength: 6
+          example: "482913"
+          description: "Codigo de 6 digitos recibido por email"
+        newPassword:
+          type: string
+          minLength: 8
+          maxLength: 100
+          example: "NuevaPassSegura123!"
+
 paths:
   /health:
     get:
@@ -319,6 +352,62 @@ paths:
                 $ref: "#/components/schemas/SuccessResponse"
         "404":
           description: Usuario no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/forgot-password:
+    post:
+      tags:
+        - Autenticacion
+      summary: Solicitar recuperacion de contrasena
+      description: |
+        Envia un codigo de recuperacion de 6 digitos al email especificado (si existe).
+        Por seguridad, la respuesta es la misma independientemente de si el email esta registrado o no.
+      operationId: forgotPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordRequest"
+      responses:
+        "200":
+          description: Solicitud procesada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Email invalido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/reset-password:
+    post:
+      tags:
+        - Autenticacion
+      summary: Restablecer contrasena
+      description: Restablece la contrasena usando el codigo de recuperacion enviado por email
+      operationId: resetPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+      responses:
+        "200":
+          description: Contrasena restablecida exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Codigo invalido o expirado, o datos de entrada invalidos
           content:
             application/json:
               schema:

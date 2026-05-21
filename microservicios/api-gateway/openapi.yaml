@@ -96,6 +96,39 @@ components:
           type: string
           example: "NewPass456!"
 
+    ForgotPasswordRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          example: "juan.perez@empresa.com"
+
+    ResetPasswordRequest:
+      type: object
+      required:
+        - email
+        - codigo
+        - newPassword
+      properties:
+        email:
+          type: string
+          format: email
+          example: "juan.perez@empresa.com"
+        codigo:
+          type: string
+          minLength: 6
+          maxLength: 6
+          example: "482913"
+          description: "Codigo de 6 digitos recibido por email"
+        newPassword:
+          type: string
+          minLength: 8
+          maxLength: 100
+          example: "NuevaPassSegura123!"
+
     CreateEmpleadoRequest:
       type: object
       required:
@@ -131,6 +164,10 @@ components:
 
     UpdateEmpleadoRequest:
       type: object
+      required:
+        - email
+        - numeroEmpleado
+        - fechaIngreso
       properties:
         nombre:
           type: string
@@ -138,12 +175,23 @@ components:
         apellido:
           type: string
           example: "Perez Garcia"
+        email:
+          type: string
+          format: email
+          example: "juan.perez@empresa.com"
+        numeroEmpleado:
+          type: string
+          example: "EMP-001"
         cargo:
           type: string
           example: "Tech Lead"
         area:
           type: string
           example: "Arquitectura"
+        fechaIngreso:
+          type: string
+          format: date
+          example: "2024-01-15"
 
     EmpleadoResponse:
       type: object
@@ -275,6 +323,8 @@ components:
       type: object
       required:
         - empleadoId
+        - email
+        - nombre
         - fechaInicio
         - fechaFin
       properties:
@@ -282,14 +332,21 @@ components:
           type: string
           format: uuid
           example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        email:
+          type: string
+          format: email
+          example: "juan.perez@empresa.com"
+        nombre:
+          type: string
+          example: "Juan Perez"
         fechaInicio:
           type: string
           format: date
-          example: "2024-07-01"
+          example: "2026-07-01"
         fechaFin:
           type: string
           format: date
-          example: "2024-07-15"
+          example: "2026-07-15"
 
     VacacionResponse:
       type: object
@@ -434,6 +491,76 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         "401":
           description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/forgot-password:
+    post:
+      tags:
+        - Autenticacion
+      summary: Solicitar recuperacion de contrasena
+      description: |
+        Envia un codigo de recuperacion de 6 digitos al email especificado.
+        Endpoint publico (no requiere JWT).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+      responses:
+        "200":
+          description: Solicitud procesada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  timestamp:
+                    type: string
+        "400":
+          description: Email invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/reset-password:
+    post:
+      tags:
+        - Autenticacion
+      summary: Restablecer contrasena
+      description: |
+        Restablece la contrasena usando el codigo de recuperacion de 6 digitos.
+        Endpoint publico (no requiere JWT).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        "200":
+          description: Contrasena restablecida exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  timestamp:
+                    type: string
+        "400":
+          description: Codigo invalido o expirado
           content:
             application/json:
               schema:

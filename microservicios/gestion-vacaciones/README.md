@@ -1,61 +1,70 @@
-# Gestión de Vacaciones — Go / Gin
+# Gestión de Vacaciones
 
-Microservicio que gestiona las solicitudes de vacaciones de los empleados. Valida fechas, evita solapamientos y publica eventos cuando se programa un período vacacional.
+Microservicio responsable de programar y gestionar períodos de vacaciones. Al crear un período, publica un evento `vacaciones.programadas` que el servicio de autenticación consume para desactivar la cuenta del empleado.
 
-## Stack Tecnológico
+**Lenguaje:** Go 1.22 · **Framework:** Gin · **Puerto:** 8084 · **BD:** PostgreSQL 16
 
-| Característica | Detalle |
-|---|---|
-| Lenguaje | Go 1.22 |
-| Framework | Gin 1.10 |
-| Puerto | 8084 |
-| Base de Datos | PostgreSQL 16 (tabla: `vacaciones`) |
-| Message Broker | RabbitMQ 3.13 (via amqp091-go) |
-| Métricas | Prometheus (client_golang 1.19) |
-| Logging | zerolog |
-| Testing | testify, go-sqlmock |
+---
 
 ## Endpoints
 
-| Método | Path | Descripción | Auth requerida |
-|---|---|---|---|
-| `GET` | `/health` | Health check del servicio | No |
-| `GET` | `/metrics` | Métricas en formato Prometheus | No |
-| `POST` | `/vacations` | Programar nuevas vacaciones | Sí |
-| `GET` | `/vacations` | Listar vacaciones (opcional `?empleadoId={uuid}`) | Sí |
-| `GET` | `/vacations/{id}` | Obtener vacación por ID | Sí |
-| `DELETE` | `/vacations/{id}` | Cancelar vacación programada | Sí |
+| Método | Path | Query params | Descripción |
+|--------|------|-------------|-------------|
+| `GET` | `/health` | — | Estado del servicio y dependencias |
+| `GET` | `/metrics` | — | Métricas Prometheus |
+| `POST` | `/vacations` | — | Programar período de vacaciones |
+| `GET` | `/vacations` | `?empleadoId=uuid` | Listar vacaciones (filtro opcional por empleado) |
+| `GET` | `/vacations/{id}` | — | Obtener un período específico |
+| `DELETE` | `/vacations/{id}` | — | Cancelar período → estado CANCELADA |
 
-## Validaciones de Negocio
+---
 
-- **fechaFin** debe ser posterior o igual a **fechaInicio**
-- No se permiten períodos solapados para el mismo empleado
-- Formato de fechas: `YYYY-MM-DD`
-- No se puede cancelar una vacación ya completada
-- No se puede cancelar una vacación que ya esté cancelada
+## Modelo de datos
 
-## Estados de Vacación
+```go
+Vacacion {
+  ID          UUID
+  EmpleadoID  UUID      (requerido)
+  FechaInicio time.Time (requerido, formato YYYY-MM-DD)
+  FechaFin    time.Time (requerido, formato YYYY-MM-DD)
+  Estado      string    // PROGRAMADA | ACTIVA | COMPLETADA | CANCELADA
+  CreatedAt   time.Time
+}
+```
 
-| Estado | Descripción |
-|---|---|
-| `PROGRAMADA` | Vacación registrada, aún no iniciada |
-| `ACTIVA` | El período vacacional está transcurriendo |
-| `COMPLETADA` | El período vacacional ha finalizado |
-| `CANCELADA` | Vacación cancelada manualmente |
-
-## Evento que Publica
-
-| Evento | Exchange | Routing Key | Payload |
-|---|---|---|---|
-| `vacaciones.programadas` | `vacaciones.exchange` | `vacaciones.programadas` | Ver payload completo abajo |
-
-Payload del evento `vacaciones.programadas`:
+## Request para crear vacaciones
 
 ```json
 {
-  "eventId": "uuid",
+  "empleadoId": "uuid-del-empleado",
+  "email": "ana@empresa.com",
+  "nombre": "Ana García",
+  "fechaInicio": "2025-08-01",
+  "fechaFin": "2025-08-15"
+}
+```
+
+> El `email` y `nombre` se incluyen en el request porque este servicio no llama a gestion-empleados por HTTP — los datos viajan en el evento publicado a RabbitMQ.
+
+---
+
+## Validaciones de negocio
+
+- `fechaFin` debe ser posterior a `fechaInicio` → error `FECHA_INVALIDA`
+- No se permiten períodos solapados para el mismo empleado → error `VACACIONES_SOLAPADAS` (409)
+- Formato de fechas obligatorio: `YYYY-MM-DD` — cualquier otro formato es rechazado
+
+---
+
+## Evento que publica
+
+**Exchange:** `vacaciones.exchange` · **Routing key:** `vacaciones.programadas`
+
+```json
+{
+  "eventId": "uuid-v4",
   "eventType": "vacaciones.programadas",
-  "timestamp": "2024-01-15T10:00:00Z",
+  "timestamp": "2024-01-15T10:30:00Z",
   "source": "gestion-vacaciones",
   "version": "1.0",
   "payload": {
@@ -63,53 +72,57 @@ Payload del evento `vacaciones.programadas`:
     "empleadoId": "uuid",
     "email": "ana@empresa.com",
     "nombre": "Ana García",
-    "fechaInicio": "2024-08-01",
-    "fechaFin": "2024-08-15"
+    "fechaInicio": "2025-08-01",
+    "fechaFin": "2025-08-15"
   }
 }
 ```
 
-## Variables de Entorno
+Consumido por: **autenticacion** (desactiva cuenta) y **notificaciones** (envía email de confirmación).
 
-| Variable | Descripción | Valor por Defecto |
+---
+
+## Variables de entorno
+
+| Variable | Descripción | Valor por defecto |
 |---|---|---|
 | `DB_HOST` | Host de PostgreSQL | `localhost` |
 | `DB_PORT` | Puerto de PostgreSQL | `5432` |
 | `DB_NAME` | Nombre de la base de datos | `vacaciones_db` |
 | `DB_USER` | Usuario de BD | `vacaciones_user` |
 | `DB_PASSWORD` | Contraseña de BD | `vacaciones_pass` |
-| `RABBITMQ_URL` | URL de conexión a RabbitMQ | `amqp://guest:guest@localhost:5672` |
-| `PORT` | Puerto del servidor | `8084` |
+| `RABBITMQ_URL` | URL AMQP | `amqp://guest:guest@localhost:5672` |
+| `PORT` | Puerto del servicio | `8084` |
 
-## Cómo Correr los Tests
+---
 
-Sin Go instalado localmente:
+## Tests
 
 ```bash
-docker run --rm -v "${PWD}:/app" -w /app golang:1.22-alpine go test ./... -v -cover
+# Sin Go instalado localmente:
+docker run --rm -v "${PWD}:/app" -w /app golang:1.22-alpine \
+  go test ./... -v -cover
+
+# Con Go instalado:
+go test ./... -cover
 ```
 
-Con Go instalado localmente:
+| Suite | Cantidad | Tipo |
+|---|---|---|
+| `vacaciones_service_test.go` | 14 | Unitarios (mocks con testify) |
+| `vacaciones_handler_test.go` | 13 | Integración (httptest) |
+| **Total** | **27** | **0 fallos** |
+
+> Los mocks `MockRepository` y `MockPublisher` se definen en `vacaciones_service_test.go` y se reutilizan en `vacaciones_handler_test.go` (mismo paquete).
+
+---
+
+## Levantar solo este servicio
 
 ```bash
-go test ./... -v -cover
-```
+docker-compose up -d db-vacaciones rabbitmq
+docker-compose up -d --build gestion-vacaciones
 
-## Health Check
-
-```bash
+# Verificar
 curl http://localhost:8084/health
-```
-
-Respuesta esperada:
-```json
-{
-  "status": "UP",
-  "service": "gestion-vacaciones",
-  "timestamp": "2024-01-15T10:00:00Z",
-  "dependencies": {
-    "database": "UP",
-    "rabbitmq": "UP"
-  }
-}
 ```

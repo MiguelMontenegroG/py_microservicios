@@ -40,10 +40,12 @@ async def lifespan(app: FastAPI):
     # Iniciar consumers en background
     from src.consumers.cuenta_consumer import start_all_cuenta_consumers
     from src.consumers.vacaciones_consumer import start_vacaciones_consumer
+    from src.consumers.reset_consumer import start_reset_consumer
 
     tasks = [
         asyncio.create_task(start_all_cuenta_consumers()),
         asyncio.create_task(start_vacaciones_consumer()),
+        asyncio.create_task(start_reset_consumer()),
     ]
 
     yield
@@ -74,8 +76,9 @@ Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_sch
 async def health():
     from src.consumers.cuenta_consumer import is_consumer_running as cuenta_running
     from src.consumers.vacaciones_consumer import is_consumer_running as vacaciones_running
+    from src.consumers.reset_consumer import is_reset_consumer_running as reset_running
 
-    consumer_ok = cuenta_running() or vacaciones_running()
+    consumer_ok = cuenta_running() or vacaciones_running() or reset_running()
 
     rabbitmq_status = "UP" if consumer_ok else "DOWN"
     smtp_status = "UP" if await check_smtp_connection() else "DOWN"

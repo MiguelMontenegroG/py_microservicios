@@ -45,8 +45,11 @@ app:
     routing-key:
       cuenta-activada: cuenta.activada
       cuenta-desactivada: cuenta.desactivada
+      cuenta-reset-solicitado: cuenta.reset-solicitado
   bcrypt:
     strength: ${BCRYPT_STRENGTH:12}
+  password-reset:
+    token-ttl-minutes: ${PASSWORD_RESET_TTL:5}
 
 management:
   endpoints:

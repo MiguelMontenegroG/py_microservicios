@@ -53,7 +53,7 @@ async def process_empleado_creado(message: aio_pika.IncomingMessage):
 
 
 async def process_empleado_actualizado(message: aio_pika.IncomingMessage):
-    """Procesar evento empleado.actualizado: sincronizar nombre y apellido"""
+    """Procesar evento empleado.actualizado: sincronizar nombre, apellido y email"""
     async with message.process(ignore_processed=True):
         try:
             body = message.body.decode()
@@ -69,16 +69,19 @@ async def process_empleado_actualizado(message: aio_pika.IncomingMessage):
             cambios = payload.get("cambios", payload)
             nombre = cambios.get("nombre", "")
             apellido = cambios.get("apellido", "")
+            email = cambios.get("email", "")
 
-            if not nombre and not apellido:
-                logger.debug(f"Evento empleado.actualizado sin cambios de nombre/apellido: {empleado_id}")
-                return
+            if nombre or apellido:
+                await PerfilService.sincronizar_datos(empleado_id, nombre, apellido)
 
-            await PerfilService.sincronizar_datos(empleado_id, nombre, apellido)
+            if email:
+                await PerfilService.sincronizar_email(empleado_id, email)
+
+            if not nombre and not apellido and not email:
+                logger.debug(f"Evento empleado.actualizado sin cambios relevantes: {empleado_id}")
 
         except Exception as e:
             logger.error(f"Error procesando empleado.actualizado: {e}", exc_info=True)
-
 
 async def process_empleado_eliminado(message: aio_pika.IncomingMessage):
     """Procesar evento empleado.eliminado: archivar perfil"""

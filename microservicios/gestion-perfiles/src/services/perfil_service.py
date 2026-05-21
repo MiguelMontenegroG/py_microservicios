@@ -77,6 +77,25 @@ class PerfilService:
         return None
 
     @staticmethod
+    async def sincronizar_email(empleado_id: str, email: str) -> Optional[PerfilDB]:
+        """Sincronizar email del perfil desde evento de actualizacion"""
+        collection = get_collection()
+        result = await collection.find_one_and_update(
+            {"empleadoId": empleado_id},
+            {"$set": {
+                "email": email,
+                "updatedAt": datetime.now(timezone.utc),
+            }},
+            return_document=True,
+        )
+        if result:
+            result.pop("_id", None)
+            logger.info(f"Email sincronizado para empleado {empleado_id}: {email}")
+            return PerfilDB(**result)
+        logger.warning(f"Intento de sincronizar email en perfil inexistente: {empleado_id}")
+        return None
+
+    @staticmethod
     async def sincronizar_datos(empleado_id: str, nombre: str, apellido: str) -> Optional[PerfilDB]:
         """Sincronizar datos del perfil desde evento de actualizacion"""
         collection = get_collection()

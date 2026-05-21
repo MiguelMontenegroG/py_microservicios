@@ -66,6 +66,8 @@ microservicios/autenticacion/
 │   │   │   │   ├── ValidateTokenRequest.java
 │   │   │   │   ├── ValidateTokenResponse.java
 │   │   │   │   ├── ChangePasswordRequest.java
+│   │   │   │   ├── ForgotPasswordRequest.java
+│   │   │   │   ├── ResetPasswordRequest.java
 │   │   │   │   ├── HealthResponse.java
 │   │   │   │   ├── ErrorResponse.java
 │   │   │   │   ├── EventoEnvelope.java
@@ -79,15 +81,18 @@ microservicios/autenticacion/
 │   │   │   │   └── UsuarioNotFoundException.java
 │   │   │   ├── model/
 │   │   │   │   ├── Usuario.java                 # Entidad de usuarios
+│   │   │   │   ├── PasswordResetToken.java      # Token de recuperacion de contrasena
 │   │   │   │   └── AuditLog.java                # Auditoria de acciones
 │   │   │   ├── repository/
 │   │   │   │   ├── UsuarioRepository.java
+│   │   │   │   ├── PasswordResetTokenRepository.java
 │   │   │   │   └── AuditLogRepository.java
 │   │   │   ├── security/
 │   │   │   │   └── JwtAuthenticationFilter.java # Filtro JWT
 │   │   │   └── service/
 │   │   │       ├── AuthService.java             # Logica de negocio
 │   │   │       ├── JwtService.java              # Manejo de tokens JWT
+│   │   │       ├── PasswordResetService.java    # Recuperacion de contrasena
 │   │   │       ├── EmpleadoEventConsumer.java   # Consumidor de eventos RabbitMQ
 │   │   │       └── CuentaEventPublisher.java    # Publicador de eventos RabbitMQ
 │   │   └── resources/
@@ -95,9 +100,10 @@ microservicios/autenticacion/
 │   │       └── logback-spring.xml               # Logging
 │   └── test/java/com/empresa/autenticacion/
 │       ├── service/
-│       │   └── AuthServiceTest.java             # Tests unitarios (13)
+│       │   ├── AuthServiceTest.java             # Tests unitarios (13)
+│       │   └── PasswordResetServiceTest.java    # Tests de recuperacion (8)
 │       └── controller/
-│           └── AuthControllerIntegrationTest.java # Tests de integracion (9)
+│           └── AuthControllerIntegrationTest.java # Tests de integracion (15)
 ├── scripts/
 │   └── generate_hash.py                         # Script para generar hash BCrypt
 ├── Dockerfile                                   # Build multi-etapa
@@ -115,6 +121,8 @@ microservicios/autenticacion/
 | `POST` | `/auth/login` | Iniciar sesion y obtener token JWT | No |
 | `POST` | `/auth/change-password` | Cambiar contrasena del usuario autenticado | JWT |
 | `POST` | `/auth/validate` | Validar token JWT (uso interno entre servicios) | No |
+| `POST` | `/auth/forgot-password` | Solicitar codigo de recuperacion de contrasena (se envia por email via RabbitMQ/notificaciones) | No |
+| `POST` | `/auth/reset-password` | Restablecer contrasena usando codigo de 6 digitos recibido por email | No |
 | `POST` | `/auth/seed` | **SOLO DESARROLLO** - Crear usuario admin de prueba | No |
 
 ### Gestion de Cuentas
@@ -186,6 +194,57 @@ Servicio Interno              Autenticacion
   │◄────────────────────────────│
 ```
 
+## Recuperacion de Contrasena
+
+El flujo de recuperacion de contrasena permite a un usuario restablecer su acceso sin intervencion administrativa.
+
+### Flujo
+
+```
+Usuario                           Autenticacion                   RabbitMQ                   Notificaciones
+  │                                     │                            │                            │
+  │ POST /auth/forgot-password          │                            │                            │
+  │ { email }                           │                            │                            │
+  │──────────────────────────────────► │                            │                            │
+  │                                     │ Valida que el email       │                            │
+  │                                     │ existe y la cuenta esta   │                            │
+  │                                     │ activa                    │                            │
+  │                                     │                            │                            │
+  │                                     │ Genera codigo de 6 dig.   │                            │
+  │                                     │ Guarda en BD (expira 5min)│                            │
+  │                                     │                            │                            │
+  │                                     │ Publica evento ──────────►│                            │
+  │                                     │ cuenta.reset-solicitado   │                            │
+  │                                     │ {email, codigo, nombre}   │                            │
+  │                                     │                            │──────────────────────────►│
+  │ 200 { success, message }            │                            │ Envia email con codigo     │
+  │◄─────────────────────────────────── │                            │ (plantilla recuperacion.html)│
+  │                                     │                            │                            │
+  │ (usuario revisa MailHog:8025)       │                            │                            │
+  │                                     │                            │                            │
+  │ POST /auth/reset-password           │                            │                            │
+  │ { email, codigo, newPassword }      │                            │                            │
+  │──────────────────────────────────► │                            │                            │
+  │                                     │ Busca token por           │                            │
+  │                                     │ email + codigo            │                            │
+  │                                     │ Valida que no este        │                            │
+  │                                     │ expirado ni utilizado     │                            │
+  │                                     │                            │                            │
+  │                                     │ Actualiza password hash   │                            │
+  │                                     │ Marca token como utilizado│                            │
+  │                                     │                            │                            │
+  │ 200 { success, message }            │                            │                            │
+  │◄─────────────────────────────────── │                            │                            │
+```
+
+### Seguridad
+
+- Si el email no existe, se responde con el mismo mensaje de exito (no se revela informacion de cuentas existentes)
+- Si la cuenta esta desactivada, la solicitud se ignora silenciosamente
+- El codigo de 6 digitos expira a los 5 minutos (configurable via `PASSWORD_RESET_TTL`)
+- Los tokens anteriores no utilizados se invalidan al solicitar un nuevo codigo
+- Al expirar o usarse, el token se marca como utilizado y no puede reutilizarse
+
 ## Comunicacion Asincrona (RabbitMQ)
 
 ### Eventos Consumidos
@@ -202,6 +261,7 @@ Servicio Interno              Autenticacion
 |----------|-------------|--------|---------|
 | `cuentas.exchange` | `cuenta.activada` | Cuenta activada / creada | notificaciones |
 | `cuentas.exchange` | `cuenta.desactivada` | Cuenta desactivada | notificaciones |
+| `cuentas.exchange` | `cuenta.reset-solicitado` | Recuperacion de contrasena solicitada | notificaciones |
 
 ## Configuracion
 
@@ -220,6 +280,7 @@ Servicio Interno              Autenticacion
 | `JWT_SECRET` | `MiClaveSecretaParaJWTDeAutenticacionDebeSerLarga32Chars!` | Clave secreta para firmar JWT |
 | `JWT_EXPIRATION_MS` | `86400000` | Tiempo de expiracion del token (24h en ms) |
 | `BCRYPT_STRENGTH` | `12` | Coste del algoritmo BCrypt |
+| `PASSWORD_RESET_TTL` | `5` | Minutos de validez del codigo de recuperacion de contrasena |
 | `LOG_LEVEL` | `INFO` | Nivel de logging |
 
 ## Ejecucion

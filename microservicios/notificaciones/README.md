@@ -22,6 +22,7 @@ Microservicio exclusivamente consumidor. No tiene base de datos ni publica event
 | `notif.cuenta.activada` | `cuenta.activada` | `bienvenida.html` | Email del empleado |
 | `notif.cuenta.desactivada` | `cuenta.desactivada` | `desactivacion.html` | Email del empleado |
 | `notif.vacaciones.programadas` | `vacaciones.programadas` | `vacaciones.html` | Email del empleado |
+| `notif.cuenta.reset-solicitado` | `cuenta.reset-solicitado` | `recuperacion.html` | Email del empleado |
 
 ## Plantillas de Email
 
@@ -47,6 +48,13 @@ Variables que recibe:
 - `nombre` — Nombre del empleado
 - `motivo` — Razón de la desactivación (VACACIONES u OFFBOARDING)
 - `timestamp` — Fecha y hora de la desactivación
+
+### recuperacion.html
+
+Variables que recibe:
+- `nombre` — Nombre del empleado
+- `codigo` — Código de 6 dígitos para restablecer la contraseña
+- `expira_minutos` — Tiempo de validez del código (por defecto 5 minutos)
 
 ## Cómo Verificar que Funciona
 

@@ -42,4 +42,36 @@ router.post('/change-password', authMiddleware, async (req, res, next) => {
   }
 });
 
+// POST /auth/forgot-password — publico (sin JWT)
+router.post('/forgot-password', async (req, res, next) => {
+  try {
+    const response = await forwardRequest(
+      'POST',
+      `${config.services.AUTH_URL}/auth/forgot-password`,
+      req.body,
+      { 'Content-Type': 'application/json' }
+    );
+
+    return res.status(response.status).json(response.data);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /auth/reset-password — publico (sin JWT)
+router.post('/reset-password', async (req, res, next) => {
+  try {
+    const response = await forwardRequest(
+      'POST',
+      `${config.services.AUTH_URL}/auth/reset-password`,
+      req.body,
+      { 'Content-Type': 'application/json' }
+    );
+
+    return res.status(response.status).json(response.data);
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;

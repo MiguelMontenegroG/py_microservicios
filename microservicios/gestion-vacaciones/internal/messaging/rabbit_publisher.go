@@ -3,6 +3,7 @@ package messaging
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,8 +16,7 @@ import (
 const (
 	exchangeName = "vacaciones.exchange"
 	exchangeType = "topic"
-	maxRetries   = 5
-	retryDelay   = 3 * time.Second
+	retryDelay   = 5 * time.Second
 )
 
 type RabbitPublisher interface {
@@ -26,38 +26,50 @@ type RabbitPublisher interface {
 }
 
 type rabbitPublisher struct {
-	conn    *amqp.Connection
-	channel *amqp.Channel
-	logger  zerolog.Logger
+	conn        *amqp.Connection
+	channel     *amqp.Channel
+	connMu      sync.RWMutex
+	rabbitMQURL string
+	logger      zerolog.Logger
+	connected   bool
+	closeCh     chan struct{}
 }
 
 func NewRabbitPublisher(rabbitMQURL string, logger zerolog.Logger) (RabbitPublisher, error) {
-	var conn *amqp.Connection
-	var err error
-
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		conn, err = amqp.Dial(rabbitMQURL)
-		if err == nil {
-			break
-		}
-		logger.Warn().
-			Int("attempt", attempt).
-			Int("maxRetries", maxRetries).
-			Err(err).
-			Msg("Error conectando a RabbitMQ, reintentando...")
-		if attempt < maxRetries {
-			time.Sleep(retryDelay)
-		}
+	p := &rabbitPublisher{
+		rabbitMQURL: rabbitMQURL,
+		logger:      logger,
+		closeCh:     make(chan struct{}),
 	}
 
+	// Intentar conexion inicial
+	if err := p.connect(); err != nil {
+		logger.Warn().
+			Err(err).
+			Msg("No se pudo conectar a RabbitMQ al iniciar, se iniciara en modo degradado y se reintentara en background")
+		// Iniciar goroutine de reconexion en background
+		go p.reconnectLoop()
+		return p, nil
+	}
+
+	logger.Info().
+		Str("exchange", exchangeName).
+		Str("type", exchangeType).
+		Msg("Conexion a RabbitMQ establecida exitosamente")
+
+	return p, nil
+}
+
+func (r *rabbitPublisher) connect() error {
+	conn, err := amqp.Dial(r.rabbitMQURL)
 	if err != nil {
-		return nil, fmt.Errorf("error conectando a RabbitMQ despues de %d intentos: %w", maxRetries, err)
+		return fmt.Errorf("error conectando a RabbitMQ: %w", err)
 	}
 
 	ch, err := conn.Channel()
 	if err != nil {
 		conn.Close()
-		return nil, fmt.Errorf("error abriendo canal RabbitMQ: %w", err)
+		return fmt.Errorf("error abriendo canal RabbitMQ: %w", err)
 	}
 
 	err = ch.ExchangeDeclare(
@@ -72,30 +84,82 @@ func NewRabbitPublisher(rabbitMQURL string, logger zerolog.Logger) (RabbitPublis
 	if err != nil {
 		ch.Close()
 		conn.Close()
-		return nil, fmt.Errorf("error declarando exchange %s: %w", exchangeName, err)
+		return fmt.Errorf("error declarando exchange %s: %w", exchangeName, err)
 	}
 
-	logger.Info().
-		Str("exchange", exchangeName).
-		Str("type", exchangeType).
-		Msg("Conexion a RabbitMQ establecida exitosamente")
+	r.connMu.Lock()
+	defer r.connMu.Unlock()
 
-	return &rabbitPublisher{
-		conn:    conn,
-		channel: ch,
-		logger:  logger,
-	}, nil
+	// Cerrar conexion anterior si existe
+	if r.conn != nil && !r.conn.IsClosed() {
+		r.conn.Close()
+	}
+	if r.channel != nil {
+		r.channel.Close()
+	}
+
+	r.conn = conn
+	r.channel = ch
+	r.connected = true
+
+	return nil
+}
+
+func (r *rabbitPublisher) reconnectLoop() {
+	attempt := 1
+	for {
+		select {
+		case <-r.closeCh:
+			return
+		default:
+			time.Sleep(retryDelay)
+
+			r.connMu.RLock()
+			isConnected := r.connected
+			r.connMu.RUnlock()
+
+			if isConnected {
+				attempt = 1
+				continue
+			}
+
+			r.logger.Info().
+				Int("attempt", attempt).
+				Msg("Reintentando conexion a RabbitMQ en background...")
+
+			if err := r.connect(); err != nil {
+				r.logger.Warn().
+					Int("attempt", attempt).
+					Err(err).
+					Msg("Reintento de conexion a RabbitMQ fallido")
+				attempt++
+				continue
+			}
+
+			r.logger.Info().
+				Int("attempts", attempt).
+				Msg("Conexion a RabbitMQ restablecida exitosamente")
+			attempt = 1
+		}
+	}
 }
 
 func (r *rabbitPublisher) IsConnected() bool {
-	if r.conn == nil || r.conn.IsClosed() {
-		return false
-	}
-	return true
+	r.connMu.RLock()
+	defer r.connMu.RUnlock()
+	return r.connected && r.conn != nil && !r.conn.IsClosed()
 }
 
 func (r *rabbitPublisher) PublishVacacionProgramada(vacacion *models.Vacacion, email, nombre string) error {
-	if !r.IsConnected() {
+	r.connMu.RLock()
+	isConnected := r.connected && r.conn != nil && !r.conn.IsClosed()
+	ch := r.channel
+	r.connMu.RUnlock()
+
+	if !isConnected || ch == nil {
+		r.logger.Warn().
+			Str("vacacionId", vacacion.ID.String()).
+			Msg("RabbitMQ no conectado, no se puede publicar evento vacaciones.programadas")
 		return fmt.Errorf("RabbitMQ no esta conectado")
 	}
 
@@ -122,7 +186,7 @@ func (r *rabbitPublisher) PublishVacacionProgramada(vacacion *models.Vacacion, e
 		return fmt.Errorf("error serializando evento: %w", err)
 	}
 
-	err = r.channel.Publish(
+	err = ch.Publish(
 		exchangeName,
 		"vacaciones.programadas",
 		false, // mandatory
@@ -139,6 +203,12 @@ func (r *rabbitPublisher) PublishVacacionProgramada(vacacion *models.Vacacion, e
 			Err(err).
 			Str("vacacionId", vacacion.ID.String()).
 			Msg("Error publicando evento vacaciones.programadas")
+
+		// Si falla la publicacion, marcar como desconectado para reintentar
+		r.connMu.Lock()
+		r.connected = false
+		r.connMu.Unlock()
+
 		return fmt.Errorf("error publicando evento: %w", err)
 	}
 
@@ -152,6 +222,11 @@ func (r *rabbitPublisher) PublishVacacionProgramada(vacacion *models.Vacacion, e
 }
 
 func (r *rabbitPublisher) Close() error {
+	close(r.closeCh)
+
+	r.connMu.Lock()
+	defer r.connMu.Unlock()
+
 	if r.channel != nil {
 		if err := r.channel.Close(); err != nil {
 			r.logger.Error().Err(err).Msg("Error cerrando canal RabbitMQ")
@@ -163,6 +238,7 @@ func (r *rabbitPublisher) Close() error {
 			return err
 		}
 	}
+	r.connected = false
 	r.logger.Info().Msg("Conexion RabbitMQ cerrada")
 	return nil
 }

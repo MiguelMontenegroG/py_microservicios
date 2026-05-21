@@ -108,6 +108,14 @@ async def _on_message(message: aio_pika.IncomingMessage) -> None:
             logger.error("[cuenta-consumer] Error procesando mensaje: %s", str(e))
 
 
+async def _crear_exchange_y_queue(channel, exchange_name, exchange_type, queue_name, routing_key):
+    """Declara exchange y queue, y los bindea. Usa exchange_declare para asegurar que exista."""
+    exchange = await channel.declare_exchange(exchange_name, exchange_type, durable=True)
+    queue = await channel.declare_queue(queue_name, durable=True)
+    await queue.bind(exchange, routing_key=routing_key)
+    return exchange, queue
+
+
 async def start_cuenta_activada_consumer():
     """Consumer independiente para notif.cuenta.activada."""
     global _cuenta_activada_running
@@ -118,15 +126,19 @@ async def start_cuenta_activada_consumer():
         channel = await connection.channel()
         await channel.set_qos(prefetch_count=1)
 
-        exchange = await channel.get_exchange("cuentas.exchange")
-        queue = await channel.declare_queue("notif.cuenta.activada", durable=True)
-        await queue.bind(exchange, routing_key="cuenta.activada")
+        _, queue = await _crear_exchange_y_queue(
+            channel,
+            "cuentas.exchange",
+            aio_pika.ExchangeType.TOPIC,
+            "notif.cuenta.activada",
+            "cuenta.activada"
+        )
 
         _cuenta_activada_running = True
         logger.info("[cuenta-activada] Consumer iniciado, esperando mensajes...")
 
-        async with queue.consume(_on_message):
-            await asyncio.Future()
+        consumer_tag = await queue.consume(_on_message)
+        await asyncio.Future()
     except Exception as e:
         logger.error("[cuenta-activada] Consumer caido: %s", str(e))
     finally:
@@ -145,15 +157,19 @@ async def start_cuenta_desactivada_consumer():
         channel = await connection.channel()
         await channel.set_qos(prefetch_count=1)
 
-        exchange = await channel.get_exchange("cuentas.exchange")
-        queue = await channel.declare_queue("notif.cuenta.desactivada", durable=True)
-        await queue.bind(exchange, routing_key="cuenta.desactivada")
+        _, queue = await _crear_exchange_y_queue(
+            channel,
+            "cuentas.exchange",
+            aio_pika.ExchangeType.TOPIC,
+            "notif.cuenta.desactivada",
+            "cuenta.desactivada"
+        )
 
         _cuenta_desactivada_running = True
         logger.info("[cuenta-desactivada] Consumer iniciado, esperando mensajes...")
 
-        async with queue.consume(_on_message):
-            await asyncio.Future()
+        consumer_tag = await queue.consume(_on_message)
+        await asyncio.Future()
     except Exception as e:
         logger.error("[cuenta-desactivada] Consumer caido: %s", str(e))
     finally:

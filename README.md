@@ -314,6 +314,29 @@ curl -X POST http://localhost:8080/vacations \
 
 ---
 
+### Recuperacion de Contrasena
+
+El sistema permite recuperar la contrasena sin intervencion del administrador mediante un codigo de 6 digitos enviado por email.
+
+```bash
+# Paso 1 — Solicitar codigo de recuperacion (no requiere JWT)
+curl -X POST http://localhost:8080/auth/forgot-password \
+  -H "Content-Type: application/json" \
+  -d '{"email":"ana@empresa.com"}'
+# Respuesta (siempre la misma por seguridad):
+# {"success":true,"message":"Si el email esta registrado, recibiras un codigo de recuperacion"}
+
+# Paso 2 — Ver el codigo en MailHog (http://localhost:8025)
+# Usar el codigo de 6 digitos recibido
+
+# Paso 3 — Restablecer la contrasena con el codigo
+curl -X POST http://localhost:8080/auth/reset-password \
+  -H "Content-Type: application/json" \
+  -d '{"email":"ana@empresa.com","codigo":"482913","newPassword":"NuevaPassword123!"}'
+# Respuesta:
+# {"success":true,"message":"Contrasena restablecida exitosamente"}
+```
+
 ### Cambio de Contraseña
 
 ```bash
@@ -347,6 +370,8 @@ curl -X DELETE http://localhost:8080/employees/{EMPLEADO_ID} \
 |---|---|---|---|
 | `POST` | `/auth/login` | ❌ | Login — retorna JWT |
 | `POST` | `/auth/change-password` | ✅ | Cambiar contraseña |
+| `POST` | `/auth/forgot-password` | ❌ | Solicitar codigo de recuperacion de contrasena (se envia por email) |
+| `POST` | `/auth/reset-password` | ❌ | Restablecer contrasena con codigo de 6 digitos |
 | `GET` | `/employees` | ✅ | Listar empleados |
 | `POST` | `/employees` | ✅ | Crear empleado (dispara onboarding) |
 | `GET` | `/employees/{id}` | ✅ | Empleado completo (datos + perfil) |
@@ -381,13 +406,15 @@ Authorization: Bearer {JWT_TOKEN}
 | `vacaciones.exchange` | `vacaciones.programadas` | gestion-vacaciones | autenticacion, notificaciones |
 | `cuentas.exchange` | `cuenta.activada` | autenticacion | notificaciones |
 | `cuentas.exchange` | `cuenta.desactivada` | autenticacion | notificaciones |
+| `cuentas.exchange` | `cuenta.reset-solicitado` | autenticacion | notificaciones |
 
-### Queues activas (9)
+### Queues activas (10)
 
 ```
 auth.empleado.creado          perfiles.empleado.creado       notif.cuenta.activada
 auth.empleado.eliminado       perfiles.empleado.actualizado  notif.cuenta.desactivada
 auth.vacaciones.programadas   perfiles.empleado.eliminado    notif.vacaciones.programadas
+                                                              notif.cuenta.reset-solicitado
 ```
 
 ### Estados del empleado
@@ -476,11 +503,11 @@ py_microservicios/
 │   │   ├── Dockerfile              # Multi-stage, bellsoft/liberica-openjre-alpine:21
 │   │   ├── Jenkinsfile
 │   │   ├── src/main/java/
-│   │   │   ├── controller/         # AuthController (login, validate, change-password)
-│   │   │   ├── service/            # AuthService, JwtService, EmpleadoEventConsumer
-│   │   │   ├── model/              # Usuario, AuditLog
+│   │   │   ├── controller/         # AuthController (login, validate, change-password, forgot/reset-password)
+│   │   │   ├── service/            # AuthService, JwtService, PasswordResetService, EmpleadoEventConsumer
+│   │   │   ├── model/              # Usuario, PasswordResetToken, AuditLog
 │   │   │   └── config/             # SecurityConfig, RabbitMQConfig
-│   │   └── src/test/               # 22 tests (13 unitarios + 9 integración)
+│   │   └── src/test/               # 36 tests (21 unitarios + 15 integración)
 │   │
 │   ├── gestion-empleados/          # Java 21 / Spring Boot — puerto 8082
 │   │   ├── Dockerfile              # Multi-stage, bellsoft/liberica-openjre-alpine:21
@@ -518,9 +545,9 @@ py_microservicios/
 │       ├── Jenkinsfile
 │       ├── src/
 │       │   ├── email_service.py    # aiosmtplib + Jinja2
-│       │   ├── consumers/          # cuenta_consumer.py, vacaciones_consumer.py
-│       │   └── templates/          # bienvenida.html, vacaciones.html, desactivacion.html
-│       └── tests/                  # 42 tests, 72.86% cobertura
+│   │   ├── consumers/          # cuenta_consumer.py, vacaciones_consumer.py, reset_consumer.py
+│   │   └── templates/          # bienvenida.html, vacaciones.html, desactivacion.html, recuperacion.html
+│       └── tests/                  # 51 tests, 72.86% cobertura
 │
 ├── observabilidad/
 │   ├── logs/
@@ -535,14 +562,6 @@ py_microservicios/
 │       ├── dashboards-provisioning.yml
 │       ├── overview.json           # Dashboard principal (14 paneles)
 │       └── logs-dashboard.json     # Dashboard de logs
-│
-├── docs/
-│   ├── arquitectura.md             # Modelos de datos, payloads de eventos, estándares HTTP
-│   ├── eventos.md                  # Exchanges, queues, payloads completos
-│   └── guias/
-│       ├── AGENTE_IA_INSTRUCCIONES.md   # Guía para agente de IA (lecciones aprendidas)
-│       ├── GUIA_PRUEBAS.md              # Pruebas funcionales del sistema completo
-│       └── ORDEN_READMES.md
 │
 └── scripts/
     ├── init-db.sql                 # Esquema inicial de las 3 bases de datos PostgreSQL
@@ -731,12 +750,12 @@ Invoke-RestMethod -Uri "http://localhost:8080/auth/login" `
 | Servicio | Tests unitarios | Tests integración | Total | Cobertura |
 |---|---|---|---|---|
 | gestion-empleados | 17 | 17 | 34 | ≥ 70% |
-| autenticacion | 13 | 9 | 22 | ≥ 70% |
+| autenticacion | 21 | 15 | 36 | ≥ 70% |
 | gestion-perfiles | 9 | 9 | 18 | ≥ 70% |
 | gestion-vacaciones | 14 | 13 | 27 | ≥ 70% |
-| notificaciones | 36 | 6 | 42 | 72.86% |
+| notificaciones | 45 | 6 | 51 | 72.86% |
 | api-gateway | 34 | 3 | 37 | 89.68% |
-| **Total** | **123** | **57** | **180** | **≥ 70% todos** |
+| **Total** | **140** | **63** | **203** | **≥ 70% todos** |
 
 **Ejecutar tests de un servicio:**
 ```bash

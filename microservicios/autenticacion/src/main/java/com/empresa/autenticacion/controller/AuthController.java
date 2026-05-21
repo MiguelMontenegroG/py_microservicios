@@ -2,14 +2,17 @@ package com.empresa.autenticacion.controller;
 
 import com.empresa.autenticacion.dto.ChangePasswordRequest;
 import com.empresa.autenticacion.dto.ErrorResponse;
+import com.empresa.autenticacion.dto.ForgotPasswordRequest;
 import com.empresa.autenticacion.dto.HealthResponse;
 import com.empresa.autenticacion.dto.LoginRequest;
 import com.empresa.autenticacion.dto.LoginResponse;
+import com.empresa.autenticacion.dto.ResetPasswordRequest;
 import com.empresa.autenticacion.dto.ValidateTokenRequest;
 import com.empresa.autenticacion.dto.ValidateTokenResponse;
 import com.empresa.autenticacion.model.Usuario;
 import com.empresa.autenticacion.repository.UsuarioRepository;
 import com.empresa.autenticacion.service.AuthService;
+import com.empresa.autenticacion.service.PasswordResetService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -43,11 +46,13 @@ public class AuthController {
     private static final Logger log = LoggerFactory.getLogger(AuthController.class);
 
     private final AuthService authService;
+    private final PasswordResetService passwordResetService;
     private final DataSource dataSource;
     private final UsuarioRepository usuarioRepository;
 
-    public AuthController(AuthService authService, DataSource dataSource, UsuarioRepository usuarioRepository) {
+    public AuthController(AuthService authService, PasswordResetService passwordResetService, DataSource dataSource, UsuarioRepository usuarioRepository) {
         this.authService = authService;
+        this.passwordResetService = passwordResetService;
         this.dataSource = dataSource;
         this.usuarioRepository = usuarioRepository;
     }
@@ -150,6 +155,40 @@ public class AuthController {
         response.put("message", "Cuenta desactivada exitosamente");
         response.put("timestamp", LocalDateTime.now().toString());
 
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/auth/forgot-password")
+    @Operation(summary = "Solicitar recuperacion de contrasena",
+            description = "Envia un codigo de recuperacion de 6 digitos al email especificado (si existe)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Solicitud procesada (el email se envia si la cuenta existe)"),
+    })
+    public ResponseEntity<Map<String, Object>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        passwordResetService.solicitarRecuperacion(request.getEmail());
+
+        // Siempre responder igual por seguridad, no revelar si el email existe
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "Si el email esta registrado, recibiras un codigo de recuperacion");
+        response.put("timestamp", LocalDateTime.now().toString());
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/auth/reset-password")
+    @Operation(summary = "Restablecer contrasena",
+            description = "Restablece la contrasena usando el codigo de recuperacion enviado por email")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Contrasena restablecida exitosamente"),
+            @ApiResponse(responseCode = "400", description = "Codigo invalido o expirado")
+    })
+    public ResponseEntity<Map<String, Object>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        passwordResetService.restablecerContrasena(request.getEmail(), request.getCodigo(), request.getNewPassword());
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "Contrasena restablecida exitosamente");
+        response.put("timestamp", LocalDateTime.now().toString());
         return ResponseEntity.ok(response);
     }
 

@@ -28,6 +28,19 @@ public class CuentaEventPublisher {
         this.cuentasExchange = cuentasExchange;
     }
 
+    public void publicarResetSolicitado(UUID empleadoId, String email, String nombre, String codigo, int expiraMinutos) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("empleadoId", empleadoId.toString());
+        payload.put("email", email);
+        payload.put("nombre", nombre);
+        payload.put("codigo", codigo);
+        payload.put("expiraMinutos", expiraMinutos);
+        Map<String, Object> envelope = buildEnvelope("cuenta.reset-solicitado", "autenticacion", payload);
+
+        rabbitTemplate.convertAndSend(cuentasExchange, "cuenta.reset-solicitado", envelope);
+        log.info("Evento cuenta.reset-solicitado publicado para email: {}", email);
+    }
+
     public void publicarCuentaActivada(CuentaActivadaEvent evento) {
         Map<String, Object> envelope = buildEnvelope("cuenta.activada", "autenticacion", Map.of(
                 "empleadoId", evento.getEmpleadoId().toString(),

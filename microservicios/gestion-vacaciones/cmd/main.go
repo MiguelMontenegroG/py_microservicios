@@ -42,10 +42,10 @@ func main() {
 		logger.Fatal().Err(err).Msg("Error ejecutando migraciones")
 	}
 
-	// Conectar a RabbitMQ
+	// Conectar a RabbitMQ (no fatal - se inicia en modo degradado si falla)
 	publisher, err := messaging.NewRabbitPublisher(cfg.RabbitMQURL, logger)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("Error conectando a RabbitMQ")
+		logger.Warn().Err(err).Msg("RabbitMQ no disponible al iniciar, el servicio continuara en modo degradado")
 	}
 	defer publisher.Close()
 

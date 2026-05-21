@@ -104,7 +104,7 @@ router.get('/:id', async (req, res, next) => {
     return res.json({
       success: true,
       data: {
-        ...empleadoData.data,
+        ...empleadoData,
         perfil: perfilData,
       },
       timestamp: new Date().toISOString(),
