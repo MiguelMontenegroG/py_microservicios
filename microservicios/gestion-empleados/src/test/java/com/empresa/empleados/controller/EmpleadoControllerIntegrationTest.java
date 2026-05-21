@@ -4,6 +4,7 @@ import com.empresa.empleados.EmpleadosApplication;
 import com.empresa.empleados.model.Empleado;
 import com.empresa.empleados.model.EstadoEmpleado;
 import com.empresa.empleados.repository.EmpleadoRepository;
+import com.empresa.empleados.service.EmpleadoEventPublisher;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -29,9 +31,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 class EmpleadoControllerIntegrationTest {
 
-    // NOTA: Este test usa el perfil "test" con H2 en modo PostgreSQL.
-    // Ver src/test/resources/application-test.properties para la configuracion.
-    // No se necesita PostgreSQL ni RabbitMQ reales.
+    @MockBean
+    private EmpleadoEventPublisher eventPublisher;
 
     @Autowired
     private MockMvc mockMvc;
