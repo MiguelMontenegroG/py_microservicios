@@ -1,6 +1,5 @@
-FROM python:3.12-alpine AS builder
+FROM python:3.12-slim AS builder
 WORKDIR /app
-RUN apk add --no-cache gcc musl-dev
 COPY requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 

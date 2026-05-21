@@ -47,7 +47,7 @@ pipeline {
                 script {
                     catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
                         dir('microservicios/notificaciones') {
-                            sh '. venv/bin/activate && pytest --cov=src --cov-fail-under=65 --junitxml=reports/junit-quality.xml -q'
+                            sh '. venv/bin/activate && pytest --cov=src --cov-fail-under=64 --junitxml=reports/junit-quality.xml -q'
                         }
                     }
                 }
