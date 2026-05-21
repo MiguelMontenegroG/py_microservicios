@@ -5,6 +5,7 @@ import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,9 +17,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.List;
-import java.util.UUID;
-
+import java.util.*;
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
@@ -58,6 +57,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 request.setAttribute("rol", rol);
 
                 log.debug("Usuario autenticado por token: {} (empleadoId: {}, rol: {})", username, empleadoId, rol);
+
+                // Envolver la request para agregar el header X-Empleado-Id
+                // Los controladores usan @RequestHeader("X-Empleado-Id") para leerlo
+                Map<String, String> extraHeaders = new HashMap<>();
+                extraHeaders.put("X-Empleado-Id", empleadoId.toString());
+                extraHeaders.put("X-Rol", rol);
+                request = new HeaderAddingRequestWrapper(request, extraHeaders);
 
             } catch (Exception e) {
                 log.warn("Error validando token JWT: {}", e.getMessage());
@@ -102,5 +108,45 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return bearerToken.substring(7);
         }
         return null;
+    }
+
+    /**
+     * Wrapper que permite agregar headers adicionales a la request.
+     */
+    private static class HeaderAddingRequestWrapper extends HttpServletRequestWrapper {
+        private final Map<String, String> extraHeaders;
+
+        public HeaderAddingRequestWrapper(HttpServletRequest request, Map<String, String> extraHeaders) {
+            super(request);
+            this.extraHeaders = extraHeaders;
+        }
+
+        @Override
+        public String getHeader(String name) {
+            String headerValue = extraHeaders.get(name);
+            if (headerValue != null) {
+                return headerValue;
+            }
+            return super.getHeader(name);
+        }
+
+        @Override
+        public Enumeration<String> getHeaderNames() {
+            Set<String> names = new HashSet<>(extraHeaders.keySet());
+            Enumeration<String> original = super.getHeaderNames();
+            while (original.hasMoreElements()) {
+                names.add(original.nextElement());
+            }
+            return Collections.enumeration(names);
+        }
+
+        @Override
+        public Enumeration<String> getHeaders(String name) {
+            String headerValue = extraHeaders.get(name);
+            if (headerValue != null) {
+                return Collections.enumeration(List.of(headerValue));
+            }
+            return super.getHeaders(name);
+        }
     }
 }
